@@ -1,12 +1,11 @@
 from pybricks.hubs import PrimeHub
-from pybricks.parameters import Color, Port, Direction
+from pybricks.parameters import Color, Port, Direction, Color
 from pybricks.tools import wait
-from pybricks.pupdevices import Motor, UltrasonicSensor
+from pybricks.pupdevices import Motor, UltrasonicSensor, ColorSensor
 from pybricks.robotics import DriveBase
 
 hub = PrimeHub()
-hub.speaker.volume(50)
-hub.speaker.beep(duration=100)
+hub.speaker.volume(100)
 
 left_motor: Motor = Motor(Port.C, positive_direction=Direction.COUNTERCLOCKWISE)
 right_motor: Motor = Motor(Port.D, positive_direction=Direction.CLOCKWISE)
@@ -18,16 +17,16 @@ base: DriveBase = DriveBase(left_motor, right_motor, wheel_diameter, axel_track)
 
 base.use_gyro(True)
 
-base.turn(360)
-base.drive(100, 1)
-
 spinning_ultrasonic: UltrasonicSensor = UltrasonicSensor(Port.A)
 ultrasonic_motor: Motor = Motor(Port.E)
 
-front_ultrasonic: UltrasonicSensor = UltrasonicSensor(Port.B)
+front_ultrasonic: UltrasonicSensor = UltrasonicSensor(Port.F)
+
+color_sensor: ColorSensor = ColorSensor(Port.B)
 
 class Robot:
-    def __init__(self, hub: PrimeHub, base: DriveBase, spinning_ultrasonic: UltrasonicSensor, ultrasonic_motor: Motor, front_ultrasonic: UltrasonicSensor) -> None:
+    def __init__(self, hub: PrimeHub, base: DriveBase, spinning_ultrasonic: UltrasonicSensor, ultrasonic_motor: Motor, 
+                 front_ultrasonic: UltrasonicSensor, color_sensor: ColorSensor) -> None:
         self.hub: PrimeHub = hub
         self.base: DriveBase = base
 
@@ -36,7 +35,9 @@ class Robot:
 
         self.front_ultrasonic: UltrasonicSensor = front_ultrasonic
 
-        self.wall_dist: int = 200
+        self.color_sensor = color_sensor
+
+        self.wall_dist: int = 120
 
     def check_front_dist(self) -> bool:
         dist = self.front_ultrasonic.distance()
@@ -47,16 +48,35 @@ class Robot:
         else:
             return False
 
+    def check_rescue(self) -> bool:
+        return (self.color_sensor.color() == Color.RED)
+
     def loop(self) -> None:
         while True:
             wall: bool = self.check_front_dist()
 
             if wall:
-                return
+                base.turn(90)
+                continue
 
-            self.base.drive(100, 0)
+            side_dist: int = self.spinning_ultrasonic.distance()
+            if side_dist > 2000:
+                side_dist = self.wall_dist
 
-robot = Robot(hub, base, spinning_ultrasonic, ultrasonic_motor, front_ultrasonic)
+            if self.check_rescue():
+                self.base.stop()
+                self.hub.speaker.beep(duration=5000)
+                self.base.straight(50)
+
+            max_turn_val: int = 85
+            error = max(min((self.wall_dist - side_dist), max_turn_val), -max_turn_val)
+            print(error)
+
+            self.base.drive(20, error)
+
+print("Hello there")
+
+robot = Robot(hub, base, spinning_ultrasonic, ultrasonic_motor, front_ultrasonic, color_sensor)
 robot.loop()
 hub.speaker.beep(duration=1000)
 
