@@ -4,6 +4,8 @@ from pybricks.tools import wait
 from pybricks.pupdevices import Motor, UltrasonicSensor, ColorSensor
 from pybricks.robotics import DriveBase
 
+from umath import sin, pi
+
 hub = PrimeHub()
 hub.speaker.volume(100)
 
@@ -19,6 +21,8 @@ base.use_gyro(True)
 
 spinning_ultrasonic: UltrasonicSensor = UltrasonicSensor(Port.A)
 ultrasonic_motor: Motor = Motor(Port.E)
+
+print(ultrasonic_motor.angle())
 
 front_ultrasonic: UltrasonicSensor = UltrasonicSensor(Port.F)
 
@@ -37,7 +41,25 @@ class Robot:
 
         self.color_sensor = color_sensor
 
+        self.current_angle: int = -60
+
         self.wall_dist: int = 120
+        self.side_dist: int = int(self.wall_dist / (sin(abs(self.current_angle) * pi / 180)))
+
+        self.reset_ultrasonic(self.current_angle)
+
+    def reset_ultrasonic(self, angle: int = -45) -> None:
+        centre_angle: int = 90
+        current_angle: int = self.ultrasonic_motor.angle()
+
+        target_angle: int = centre_angle + angle
+
+        turn_angle: int = target_angle - current_angle
+
+        self.ultrasonic_motor.run_angle(50, turn_angle)
+        self.current_angle = angle
+        self.side_dist: int = int(self.wall_dist / (sin(abs(self.current_angle) * pi / 180)))
+
 
     def check_front_dist(self) -> bool:
         dist = self.front_ultrasonic.distance()
@@ -61,15 +83,15 @@ class Robot:
 
             side_dist: int = self.spinning_ultrasonic.distance()
             if side_dist > 2000:
-                side_dist = self.wall_dist
+                side_dist = self.side_dist
 
             if self.check_rescue():
                 self.base.stop()
-                self.hub.speaker.beep(duration=5000)
-                self.base.straight(50)
+                self.hub.speaker.beep(duration=500)
+                self.base.straight(100)
 
             max_turn_val: int = 85
-            error = max(min((self.wall_dist - side_dist), max_turn_val), -max_turn_val)
+            error = max(min((self.side_dist - side_dist), max_turn_val), -max_turn_val)
             print(error)
 
             self.base.drive(20, error)
