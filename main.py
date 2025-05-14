@@ -45,9 +45,13 @@ class Robot:
         self.wall_dist: int = 120
         self.side_dist: int = int(self.wall_dist / (sin(abs(self.current_angle) * pi / 180)))
 
+        self.turn_check_dist: int = 200
+
+        self.black_val: int = 20
+
         self.set_ultrasonic(self.current_angle)
 
-    def set_ultrasonic(self, angle: int = -45) -> None:
+    def set_ultrasonic(self, angle: int = -60) -> None:
         centre_angle: int = 90
         current_angle: int = self.ultrasonic_motor.angle()
 
@@ -71,25 +75,58 @@ class Robot:
 
     def check_color(self) -> None:
         if self.color_sensor.color() == Color.RED:
+            self.base.stop()
+
             self.hub.light.on(Color.RED)
             self.hub.speaker.beep(duration=1000)
             self.hub.light.off()
             
-            while self.front_ultrasonic.distance() < self.wall_dist:
+            while self.front_ultrasonic.distance() < self.turn_check_dist:
                 self.base.turn(90)
 
-            self.base.straight(100)
+            self.base.straight(10)
 
         elif self.color_sensor.color() == Color.GREEN:
+            self.base.stop()
+
             self.hub.light.on(Color.GREEN)
             self.hub.speaker.beep(duration=1000)
             self.hub.light.off()
             
-            while self.front_ultrasonic.distance() < self.wall_dist:
+            while self.front_ultrasonic.distance() < self.turn_check_dist:
                 self.base.turn(90)
 
-            self.base.straight(100)
+            self.base.straight(10)
 
+    def check_black(self) -> None:
+        if self.color_sensor.reflection() < self.black_val:
+            print("black")
+            self.base.stop()
+
+            self.base.straight(-10)
+            
+            self.set_ultrasonic(-90)
+
+            if self.spinning_ultrasonic.distance() > self.turn_check_dist:
+                self.base.turn(-90)
+                self.set_ultrasonic()
+                self.base.straight(10)
+
+                return
+
+            self.set_ultrasonic(90)
+
+            if self.spinning_ultrasonic.distance() > self.turn_check_dist:
+                self.base.turn(90)
+                self.set_ultrasonic()
+                self.base.straight(10)
+
+                return
+
+            self.set_ultrasonic()
+
+            self.base.turn(180)
+            self.base.straight(10)
 
     def loop(self) -> None:
         while True:
@@ -103,9 +140,10 @@ class Robot:
             if side_dist > 2000:
                 side_dist = self.side_dist
 
+            self.check_black()
             self.check_color()
                 
-            max_turn_val: int = 85
+            max_turn_val: int = 80
             error = max(min((self.side_dist - side_dist), max_turn_val), -max_turn_val)
             print(error)
 
