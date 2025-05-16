@@ -52,6 +52,8 @@ class Robot:
 
         self.harmed_victim_count: int = 0
 
+        self.notes = ["E4/8", "F4/8", "G4/8", "E4/8", "F4/4", "F4/12", "G4/12", "F4/12", "E4/8", "F4/8", "G4/8", "E4/8", "D4/4", "G3/4", "E4/8", "F4/8", "G4/8", "E4/8", "F4/4", "E4/8", "F4/8", "G4/4", "G3/4", "C4/2"]
+
         self.set_ultrasonic(self.current_angle)
 
     def set_ultrasonic(self, angle: int = -60) -> None:
@@ -134,8 +136,10 @@ class Robot:
             self.base.straight(10)
 
     def check_silver(self) -> bool:
-        if self.color_sensor.reflection() >= 98:
+        if self.color_sensor.reflection() >= 90:
             self.base.stop()
+            self.base.straight(15)
+            self.hub.speaker.play_notes(self.notes, tempo=170)
 
             for _ in range(self.harmed_victim_count):
                 self.hub.speaker.beep(duration=1000)
@@ -173,5 +177,4 @@ print("Hello there")
 
 robot = Robot(hub, base, spinning_ultrasonic, ultrasonic_motor, front_ultrasonic, color_sensor)
 robot.loop()
-hub.speaker.beep(duration=1000)
 
