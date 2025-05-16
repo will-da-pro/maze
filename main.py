@@ -1,6 +1,7 @@
 from pybricks.hubs import PrimeHub
 from pybricks.parameters import Color, Port, Direction, Color
 from pybricks.pupdevices import Motor, UltrasonicSensor, ColorSensor
+from pybricks.tools import wait
 from pybricks.robotics import DriveBase
 
 from umath import sin, pi
@@ -49,6 +50,8 @@ class Robot:
 
         self.black_val: int = 20
 
+        self.harmed_victim_count: int = 0
+
         self.set_ultrasonic(self.current_angle)
 
     def set_ultrasonic(self, angle: int = -60) -> None:
@@ -59,7 +62,7 @@ class Robot:
 
         turn_angle: int = target_angle - current_angle
 
-        self.ultrasonic_motor.run_angle(50, turn_angle)
+        self.ultrasonic_motor.run_angle(100, turn_angle)
         self.current_angle = angle
         self.side_dist: int = int(self.wall_dist / (sin(abs(self.current_angle) * pi / 180)))
 
@@ -78,13 +81,15 @@ class Robot:
             self.base.stop()
 
             self.hub.light.on(Color.RED)
-            self.hub.speaker.beep(duration=1000)
+            self.hub.speaker.beep(frequency=1000, duration=1000)
             self.hub.light.off()
             
             while self.front_ultrasonic.distance() < self.turn_check_dist:
                 self.base.turn(90)
 
             self.base.straight(10)
+
+            self.harmed_victim_count += 1
 
         elif self.color_sensor.color() == Color.GREEN:
             self.base.stop()
@@ -128,6 +133,19 @@ class Robot:
             self.base.turn(180)
             self.base.straight(10)
 
+    def check_silver(self) -> bool:
+        if self.color_sensor.reflection() >= 98:
+            self.base.stop()
+
+            for _ in range(self.harmed_victim_count):
+                self.hub.speaker.beep(duration=1000)
+                wait(1000)
+
+            return True
+
+        return False
+
+
     def loop(self) -> None:
         while True:
             wall: bool = self.check_front_dist()
@@ -142,6 +160,8 @@ class Robot:
 
             self.check_black()
             self.check_color()
+            if self.check_silver():
+                return
                 
             max_turn_val: int = 80
             error = max(min((self.side_dist - side_dist), max_turn_val), -max_turn_val)
