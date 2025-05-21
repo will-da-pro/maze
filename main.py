@@ -139,7 +139,7 @@ class Robot:
         if self.color_sensor.reflection() >= 90:
             self.base.stop()
             self.base.straight(15)
-            self.hub.speaker.play_notes(self.notes, tempo=170)
+            self.hub.speaker.play_notes(self.notes, tempo=196)
 
             for _ in range(self.harmed_victim_count):
                 self.hub.speaker.beep(duration=1000)
