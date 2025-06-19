@@ -52,7 +52,13 @@ class Robot:
 
         self.harmed_victim_count: int = 0
 
-        self.notes = ["E4/8", "F4/8", "G4/8", "E4/8", "F4/4", "F4/12", "G4/12", "F4/12", "E4/8", "F4/8", "G4/8", "E4/8", "D4/4", "G3/4", "E4/8", "F4/8", "G4/8", "E4/8", "F4/4", "E4/8", "F4/8", "G4/4", "G3/4", "C4/2"]
+        self.notes = ["E4/8", "F4/8", "G4/8", "E4/8", "F4/4", "F4/12", "G4/12", "F4/12", "E4/8", "F4/8", "G4/8", "E4/8", "D4/4", "G3/4", "E4/8", "F4/8", "G4/8", "E4/8", "F4/12", "G4/12", "F4/12", "E4/8", "F4/8", "G4/4", "G3/4", "C4/2"]
+
+        self.green_hue: tuple[int, int] = (85, 128)
+        self.green_saturation: tuple[int, int] = (100, 255)
+        self.green_value: tuple[int, int] = (100, 255)
+
+        self.red_value: tuple[int, int] = ()
 
         self.set_ultrasonic(self.current_angle)
 
@@ -107,7 +113,7 @@ class Robot:
             self.set_ultrasonic()
 
             self.base.turn(180)
-            self.base.straight(20)
+            self.base.straight(10)
 
             self.harmed_victim_count += 1
 
@@ -139,7 +145,7 @@ class Robot:
             self.set_ultrasonic()
 
             self.base.turn(180)
-            self.base.straight(20)
+            self.base.straight(10)
 
 
 
@@ -202,8 +208,8 @@ class Robot:
 
             self.check_black()
             self.check_color()
-            #if self.check_silver():
-            #    return
+            if self.check_silver():
+                return
                 
             max_turn_val: int = 80
             error = max(min((self.side_dist - side_dist), max_turn_val), -max_turn_val)
