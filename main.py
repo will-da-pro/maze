@@ -86,10 +86,28 @@ class Robot:
             self.hub.speaker.beep(frequency=1000, duration=1000)
             self.hub.light.off()
             
-            while self.front_ultrasonic.distance() < self.turn_check_dist:
-                self.base.turn(90)
+            self.set_ultrasonic(-90)
 
-            self.base.straight(10)
+            if self.spinning_ultrasonic.distance() > self.turn_check_dist:
+                self.base.turn(-90)
+                self.set_ultrasonic()
+                self.base.straight(10)
+
+                return
+
+            self.set_ultrasonic(90)
+
+            if self.spinning_ultrasonic.distance() > self.turn_check_dist:
+                self.base.turn(90)
+                self.set_ultrasonic()
+                self.base.straight(10)
+
+                return
+
+            self.set_ultrasonic()
+
+            self.base.turn(180)
+            self.base.straight(20)
 
             self.harmed_victim_count += 1
 
@@ -100,10 +118,30 @@ class Robot:
             self.hub.speaker.beep(duration=1000)
             self.hub.light.off()
             
-            while self.front_ultrasonic.distance() < self.turn_check_dist:
-                self.base.turn(90)
+            self.set_ultrasonic(-90)
 
-            self.base.straight(10)
+            if self.spinning_ultrasonic.distance() > self.turn_check_dist:
+                self.base.turn(-90)
+                self.set_ultrasonic()
+                self.base.straight(10)
+
+                return
+
+            self.set_ultrasonic(90)
+
+            if self.spinning_ultrasonic.distance() > self.turn_check_dist:
+                self.base.turn(90)
+                self.set_ultrasonic()
+                self.base.straight(10)
+
+                return
+
+            self.set_ultrasonic()
+
+            self.base.turn(180)
+            self.base.straight(20)
+
+
 
     def check_black(self) -> None:
         if self.color_sensor.reflection() < self.black_val:
@@ -133,7 +171,7 @@ class Robot:
             self.set_ultrasonic()
 
             self.base.turn(180)
-            self.base.straight(10)
+            self.base.straight(20)
 
     def check_silver(self) -> bool:
         if self.color_sensor.reflection() >= 90:
@@ -164,8 +202,8 @@ class Robot:
 
             self.check_black()
             self.check_color()
-            if self.check_silver():
-                return
+            #if self.check_silver():
+            #    return
                 
             max_turn_val: int = 80
             error = max(min((self.side_dist - side_dist), max_turn_val), -max_turn_val)
