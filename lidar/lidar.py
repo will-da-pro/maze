@@ -24,13 +24,13 @@ class Lidar:
     DESCRIPTOR_GET_SAMPLERATE: bytes = b'\x04\x00\x00\x00\x15'
 
     protection_stops: int = 0
+    active: bool = False
+    health: int = -1
 
     def __init__(self, port: str, baudrate: int, timeout: int = 1) -> None:
         self.port: str = port
         self.baudrate: int = baudrate
         self.timeout: int = timeout
-
-        self.active: bool = False
 
         self.ser: Serial = Serial(self.port, self.baudrate, timeout = self.timeout)
 
@@ -63,6 +63,7 @@ class Lidar:
             else:
                 raise Exception(error_code)
         
+        self.health = status
         return status
 
 
@@ -122,11 +123,17 @@ class Lidar:
         return buffer
 
     def __del__(self) -> None:
+        if self.active:
+            self.stop()
+
         self.ser.close()
 
 if __name__ == '__main__':
     pygame.init()
+    pygame.font.init()
     surface = pygame.display.set_mode((800, 800))
+    font_size: int = 30
+    font = pygame.font.SysFont("Times New Roman", 30)
 
     port: str = ""
 
@@ -144,6 +151,8 @@ if __name__ == '__main__':
     start_time = time.time()
     t = 300
 
+    size = 800
+    scale = 0.5
 
     while True:
         try:
@@ -161,19 +170,29 @@ if __name__ == '__main__':
                 print(e)
                 continue
 
-            x = distance * sin(angle * pi / 180) / 10 + 400
-            y = -distance * cos(angle * pi / 180) / 10 + 400
+
+
+            x = distance * sin(angle * pi / 180) * scale + size / 2
+            y = -distance * cos(angle * pi / 180) * scale + size / 2
 
             #print(f"Quality: {quality}, Angle: {angle}, Distance: {distance}, X: {x}, Y: {y}")
 
             if new_scan:
+                pygame.draw.circle(surface, (0, 0, 255), (size / 2, size / 2), 5)
+
+                time_text = font.render(f"Time: {time.time() - start_time}", False, (0, 255, 0))
+                health_text = font.render(f"Health: {ser.health}", False, (0, 255, 0))
+
+                surface.blit(time_text, (5, 5))
+                surface.blit(health_text, (5, font_size + 5))
+
                 pygame.display.update()
                 surface.fill((0, 0, 0))
 
             if quality == 0:
                 continue
             
-            pygame.draw.line(surface, (255, 255, 255), (400, 400), (x, y), 2)
+            pygame.draw.line(surface, (255, 255, 255), (size / 2, size / 2), (x, y), 2)
             pygame.draw.circle(surface, (255, 0, 0), (x, y), 3)
 
             if time.time() > start_time + t:
