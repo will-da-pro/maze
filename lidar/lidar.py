@@ -2,23 +2,93 @@ from serial import Serial
 import time
 import pygame
 from math import sin, cos, pi
+from sys import platform
 
 class Lidar:
+    START_FLAG: bytes = b'\xA5'
+    START_FLAG_2: bytes = b'\x5A'
+
+    REQUEST_STOP: bytes = b'\x25'
+    REQUEST_RESET: bytes = b'\x40'
+    REQUEST_SCAN: bytes = b'\x20'
+    REQUEST_EXPRESS_SCAN: bytes = b'\x86'
+    REQUEST_FORCE_SCAN: bytes = b'\x21'
+    REQUEST_GET_INFO: bytes = b'\x50'
+    REQUEST_GET_HEALTH: bytes = b'\x52'
+    REQUEST_GET_SAMPLERATE: bytes = b'\x59'
+
+    DESCRIPTOR_SCAN: bytes = b'\x05\x00\x00\x40\x81'
+    DESCRIPTOR_EXPRESS_SCAN: bytes = b'\x54\x00\x00\x40\x82'
+    DESCRIPTOR_FORCE_SCAN: bytes = b'\x05\x00\x00\x40\x81'
+    DESCRIPTOR_GET_HEALTH: bytes = b'\x03\x00\x00\x00\x06'
+    DESCRIPTOR_GET_SAMPLERATE: bytes = b'\x04\x00\x00\x00\x15'
+
+    protection_stops: int = 0
+
     def __init__(self, port: str, baudrate: int, timeout: int = 1) -> None:
         self.port: str = port
         self.baudrate: int = baudrate
         self.timeout: int = timeout
 
+        self.active: bool = False
+
         self.ser: Serial = Serial(self.port, self.baudrate, timeout = self.timeout)
 
+    def check_health(self) -> int:
+        self.ser.write(self.START_FLAG + self.REQUEST_GET_HEALTH)
+        time.sleep(0.05)
+
+        if self.ser.read(7) != self.START_FLAG + self.START_FLAG_2 + self.DESCRIPTOR_GET_HEALTH:
+            print("Could not get health!")
+            return 1
+
+        raw: bytes = self.ser.read(3)
+
+        status: int = raw[0]
+        error_code: int = raw[1] + raw[2] << 8
+
+        if status == 0:
+            print("Health OK")
+
+        elif status == 1:
+            print("Warning: Possible Hardware Failure!")
+            print(error_code)
+        else:
+            print("Error: Hardware Failure!")
+
+            if self.protection_stops == 0:
+                self.send_reset()
+                status = self.check_health()
+            
+            else:
+                raise Exception(error_code)
+        
+        return status
+
+
+    def send_reset(self) -> None:
+        self.ser.write(self.START_FLAG + self.REQUEST_RESET)
+
+        self.protection_stops += 1
+
+        time.sleep(0.002)
+
     def start(self) -> None:
-        self.ser.write(b'\xA5\x20')
+        health = self.check_health()
 
-        descriptor: bytes = b'\xA5\x5A\x05\x00\x00\x40\x81'
+        if health == 1:
+            return
 
-        if self.ser.read(7) != descriptor:
+        self.ser.write(self.START_FLAG + self.REQUEST_SCAN)
+
+        self.active = True
+
+        if self.ser.read(7) != self.START_FLAG + self.START_FLAG_2 + self.DESCRIPTOR_SCAN:
             print("Lidar Not Started!")
             self.stop()
+            self.active = False
+
+        print("Scanning started successfully")
 
     def process_scan(self, raw: bytes) -> tuple[bool, int, float, float]:
         new_scan: bool = bool(raw[0] & 0b1)
@@ -41,7 +111,10 @@ class Lidar:
         return new_scan, quality, angle, distance
 
     def stop(self) -> None:
-        self.ser.write(b'\xA5\x25')
+        self.ser.write(self.START_FLAG + self.REQUEST_STOP)
+        self.active = False
+
+        print("Stopped Scanning")
 
     def read(self) -> bytes:
         buffer: bytes = self.ser.read(5)
@@ -53,17 +126,30 @@ class Lidar:
 
 if __name__ == '__main__':
     pygame.init()
-    surface = pygame.display.set_mode((400, 400))
+    surface = pygame.display.set_mode((800, 800))
 
-    ser = Lidar("/dev/ttyUSB0", 460800, timeout=1)
+    port: str = ""
+
+    print(platform)
+
+    if platform == "linux" or platform == "linux2":
+        port = "/dev/ttyUSB0"
+
+    elif platform == "darwin":
+        port = "/dev/tty.usbserial-10"
+
+    ser = Lidar(port, 460800, timeout=1)
     ser.start()
 
     start_time = time.time()
-    t = 60
+    t = 300
 
 
     while True:
         try:
+            if not ser.active:
+                break
+
             raw = ser.read()
 
             if len(raw) < 5:
@@ -75,18 +161,19 @@ if __name__ == '__main__':
                 print(e)
                 continue
 
-            if quality == 0:
-                continue
+            x = distance * sin(angle * pi / 180) / 10 + 400
+            y = -distance * cos(angle * pi / 180) / 10 + 400
 
-            x = distance * sin(angle * pi / 180) / 10 + 200
-            y = distance * cos(angle * pi / 180) / 10 + 200
-
-            print(f"Quality: {quality}, Angle: {angle}, Distance: {distance}, X: {x}, Y: {y}")
+            #print(f"Quality: {quality}, Angle: {angle}, Distance: {distance}, X: {x}, Y: {y}")
 
             if new_scan:
                 pygame.display.update()
                 surface.fill((0, 0, 0))
 
+            if quality == 0:
+                continue
+            
+            pygame.draw.line(surface, (255, 255, 255), (400, 400), (x, y), 2)
             pygame.draw.circle(surface, (255, 0, 0), (x, y), 3)
 
             if time.time() > start_time + t:
