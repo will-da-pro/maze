@@ -152,7 +152,7 @@ if __name__ == '__main__':
     t = 300
 
     size = 800
-    scale = 0.5
+    scale = 0.1
 
     while True:
         try:
