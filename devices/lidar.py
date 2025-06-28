@@ -3,6 +3,8 @@ import time
 import pygame
 from math import sin, cos, pi
 from sys import platform
+from threading import Thread
+import signal
 
 class Lidar:
     START_FLAG: bytes = b'\xA5'
@@ -27,18 +29,45 @@ class Lidar:
     active: bool = False
     health: int = -1
 
-    def __init__(self, port: str, baudrate: int, timeout: int = 1) -> None:
+    health_strs: dict[int, str] = {
+        -1: "Unknown",
+        0: "OK",
+        1: "Warning",
+        2: "Hardware Failure"
+    }
+
+    def __init__(self, port: str, baudrate: int, timeout: int = 1, buffer_size: int = 20) -> None:
         self.port: str = port
         self.baudrate: int = baudrate
         self.timeout: int = timeout
 
         self.ser: Serial = Serial(self.port, self.baudrate, timeout = self.timeout)
 
+        self.frame_buffer: list[dict[float, float]] = []
+        self.buffer_size: int = buffer_size
+        self.buffer_thread: Thread = Thread(target=self.update_buffer)
+
+        signal.signal(signal.SIGINT, signal.SIG_DFL)
+
+    @classmethod
+    def init_c3(cls):
+        port: str = ""
+
+        if platform == "linux" or platform == "linux2":
+            port = "/dev/ttyUSB0"
+
+        elif platform == "darwin":
+            port = "/dev/tty.usbserial-10"
+
+        return cls(port, 460800)
+
     def check_health(self) -> int:
         self.ser.write(self.START_FLAG + self.REQUEST_GET_HEALTH)
         time.sleep(0.05)
 
-        if self.ser.read(7) != self.START_FLAG + self.START_FLAG_2 + self.DESCRIPTOR_GET_HEALTH:
+        descriptor = self.ser.read(7)
+
+        if descriptor != self.START_FLAG + self.START_FLAG_2 + self.DESCRIPTOR_GET_HEALTH:
             print("Could not get health!")
             return 1
 
@@ -89,6 +118,8 @@ class Lidar:
             self.stop()
             self.active = False
 
+        self.buffer_thread.start()
+
         print("Scanning started successfully")
 
     def process_scan(self, raw: bytes) -> tuple[bool, int, float, float]:
@@ -110,6 +141,50 @@ class Lidar:
         distance: float = (raw[3] + (raw[4] << 8)) / 4
 
         return new_scan, quality, angle, distance
+
+    def update_buffer(self) -> None:
+        while True:
+            try:
+                if not self.active:
+                    break
+
+                raw = self.read()
+
+                if len(raw) < 5:
+                    continue
+
+                try:
+                    new_scan, quality, angle, distance = self.process_scan(raw)
+
+                except Exception as e:
+                    print(e)
+                    continue
+
+                if new_scan:
+                    self.frame_buffer.append({})
+
+                if len(self.frame_buffer) > self.buffer_size:
+                    self.frame_buffer.pop(0)
+
+                if quality < 5:
+                    continue
+
+                if len(self.frame_buffer) > 0:
+                    self.frame_buffer[len(self.frame_buffer) - 1][angle] = distance
+
+            except Exception as e:
+                print(e)
+                return
+
+    def pop_buffer(self) -> dict[float, float]:
+        while len(self.frame_buffer) < 2:
+            if not self.active:
+                return {}
+
+            time.sleep(0.005)
+
+        buffer: dict[float, float] = self.frame_buffer.pop(len(self.frame_buffer) - 2)
+        return buffer
 
     def stop(self) -> None:
         self.ser.write(self.START_FLAG + self.REQUEST_STOP)
@@ -170,8 +245,6 @@ if __name__ == '__main__':
                 print(e)
                 continue
 
-
-
             x = distance * sin(angle * pi / 180) * scale + size / 2
             y = -distance * cos(angle * pi / 180) * scale + size / 2
 
@@ -181,7 +254,7 @@ if __name__ == '__main__':
                 pygame.draw.circle(surface, (0, 0, 255), (size / 2, size / 2), 5)
 
                 time_text = font.render(f"Time: {time.time() - start_time}", False, (0, 255, 0))
-                health_text = font.render(f"Health: {ser.health}", False, (0, 255, 0))
+                health_text = font.render(f"Health: {ser.health_strs[ser.health]}", False, (0, 255, 0))
 
                 surface.blit(time_text, (5, 5))
                 surface.blit(health_text, (5, font_size + 5))
