@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 from serial import Serial
 import time
 import pygame
