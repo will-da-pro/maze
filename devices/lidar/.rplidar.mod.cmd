@@ -1,0 +1,1 @@
+savedcmd_/home/william/Desktop/maze/devices/lidar/rplidar.mod := printf '%s\n'   rplidar.o | awk '!x[$$0]++ { print("/home/william/Desktop/maze/devices/lidar/"$$0) }' > /home/william/Desktop/maze/devices/lidar/rplidar.mod
