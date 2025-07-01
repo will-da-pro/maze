@@ -19,7 +19,6 @@ __section(".gnu.linkonce.this_module") = {
 static const struct modversion_info ____versions[]
 __used __section("__versions") = {
 	{ 0x122c3a7e, "_printk" },
-	{ 0xa282d906, "usb_register_driver" },
 	{ 0xcf530175, "usb_deregister" },
 	{ 0x39ff040a, "module_layout" },
 };
@@ -27,4 +26,4 @@ __used __section("__versions") = {
 MODULE_INFO(depends, "");
 
 
-MODULE_INFO(srcversion, "B01B9F958361992CB4B3785");
+MODULE_INFO(srcversion, "66430A729E00258E1BFC432");

@@ -30,15 +30,14 @@ static struct usb_driver rplidar_usb_driver = {
 static int __init rplidar_init(void) {
 	printk("RPLidar Driver Initializing...\n");
 
-	int result;
+//	int result;
+//	result = usb_register(&rplidar_usb_driver);
 
-	result = usb_register(&rplidar_usb_driver);
-
-	if (result < 0) {
-		pr_err("usb_register failed for the %s driver. Error number %d\n",
-                       rplidar_usb_driver.name, result);
-                return -1;
-	}
+//	if (result < 0) {
+//		pr_err("usb_register failed for the %s driver. Error number %d\n",
+//                       rplidar_usb_driver.name, result);
+//                return -1;
+//	}
 
 	return 0;
 }
