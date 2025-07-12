@@ -1,31 +1,33 @@
 #!/usr/bin/env python3
 
-from serial import Serial
-import time
-import pygame
-from math import sin, cos, pi
-from sys import platform
-from threading import Thread
 import signal
+import time
+
+from serial import Serial
+from serial.tools import list_ports
+from threading import Thread
 
 class Lidar:
-    START_FLAG: bytes = b'\xA5'
-    START_FLAG_2: bytes = b'\x5A'
+    START_FLAG: bytes                = b'\xA5'
+    START_FLAG_2: bytes              = b'\x5A'
 
-    REQUEST_STOP: bytes = b'\x25'
-    REQUEST_RESET: bytes = b'\x40'
-    REQUEST_SCAN: bytes = b'\x20'
-    REQUEST_EXPRESS_SCAN: bytes = b'\x86'
-    REQUEST_FORCE_SCAN: bytes = b'\x21'
-    REQUEST_GET_INFO: bytes = b'\x50'
-    REQUEST_GET_HEALTH: bytes = b'\x52'
-    REQUEST_GET_SAMPLERATE: bytes = b'\x59'
+    REQUEST_STOP: bytes              = b'\x25'
+    REQUEST_RESET: bytes             = b'\x40'
+    REQUEST_SCAN: bytes              = b'\x20'
+    REQUEST_EXPRESS_SCAN: bytes      = b'\x86'
+    REQUEST_FORCE_SCAN: bytes        = b'\x21'
+    REQUEST_GET_INFO: bytes          = b'\x50'
+    REQUEST_GET_HEALTH: bytes        = b'\x52'
+    REQUEST_GET_SAMPLERATE: bytes    = b'\x59'
 
-    DESCRIPTOR_SCAN: bytes = b'\x05\x00\x00\x40\x81'
-    DESCRIPTOR_EXPRESS_SCAN: bytes = b'\x54\x00\x00\x40\x82'
-    DESCRIPTOR_FORCE_SCAN: bytes = b'\x05\x00\x00\x40\x81'
-    DESCRIPTOR_GET_HEALTH: bytes = b'\x03\x00\x00\x00\x06'
+    DESCRIPTOR_SCAN: bytes           = b'\x05\x00\x00\x40\x81'
+    DESCRIPTOR_EXPRESS_SCAN: bytes   = b'\x54\x00\x00\x40\x82'
+    DESCRIPTOR_FORCE_SCAN: bytes     = b'\x05\x00\x00\x40\x81'
+    DESCRIPTOR_GET_HEALTH: bytes     = b'\x03\x00\x00\x00\x06'
     DESCRIPTOR_GET_SAMPLERATE: bytes = b'\x04\x00\x00\x00\x15'
+
+    PRODUCT_ID: int                  = 0xEA60
+    VENDOR_ID: int                   = 0x10C4
 
     protection_stops: int = 0
     active: bool = False
@@ -53,24 +55,28 @@ class Lidar:
 
     @classmethod
     def init_c3(cls):
-        port: str = ""
+        found_port: str | None = None
+        for port in list_ports.comports():
+            if port.vid == cls.VENDOR_ID and port.pid == cls.PRODUCT_ID:
+                found_port = port.device
+                print(f"Found lidar at port {found_port}")
+                break
 
-        if platform == "linux" or platform == "linux2":
-            port = "/dev/ttyUSB0"
+        if found_port is None:
+            raise Exception("Lidar not found!")
 
-        elif platform == "darwin":
-            port = "/dev/tty.usbserial-10"
-
-        return cls(port, 460800)
+        return cls(found_port, 460800)
 
     def check_health(self) -> int:
+        self.stop()
+        time.sleep(0.1)
+        self.ser.reset_input_buffer()
         self.ser.write(self.START_FLAG + self.REQUEST_GET_HEALTH)
         time.sleep(0.05)
 
         descriptor = self.ser.read(7)
 
         if descriptor != self.START_FLAG + self.START_FLAG_2 + self.DESCRIPTOR_GET_HEALTH:
-            print("Could not get health!")
             return 1
 
         raw: bytes = self.ser.read(3)
@@ -97,7 +103,6 @@ class Lidar:
         self.health = status
         return status
 
-
     def send_reset(self) -> None:
         self.ser.write(self.START_FLAG + self.REQUEST_RESET)
 
@@ -108,7 +113,7 @@ class Lidar:
     def start(self) -> None:
         health = self.check_health()
 
-        if health == 1:
+        if health != 0:
             return
 
         self.ser.write(self.START_FLAG + self.REQUEST_SCAN)
@@ -206,23 +211,17 @@ class Lidar:
         self.ser.close()
 
 if __name__ == '__main__':
+    import pygame
+
+    from math import sin, cos, pi
+
     pygame.init()
     pygame.font.init()
     surface = pygame.display.set_mode((800, 800))
     font_size: int = 30
     font = pygame.font.SysFont("Times New Roman", 30)
 
-    port: str = ""
-
-    print(platform)
-
-    if platform == "linux" or platform == "linux2":
-        port = "/dev/ttyUSB0"
-
-    elif platform == "darwin":
-        port = "/dev/tty.usbserial-10"
-
-    ser = Lidar(port, 460800, timeout=1)
+    ser = Lidar.init_c3()
     ser.start()
 
     start_time = time.time()
