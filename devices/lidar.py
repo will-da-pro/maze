@@ -1,11 +1,40 @@
 #!/usr/bin/env python3
 
+import math
 import signal
 import time
 
 from serial import Serial
 from serial.tools import list_ports
 from threading import Thread
+
+class Point:
+    def __init__(self, x: float, y: float) -> None:
+        self.x: float = x
+        self.y: float = y
+
+    def __eq__(self, value: object, /) -> bool:
+        if not isinstance(value, Point):
+            return False
+
+        elif self.x == value.x and self.y == value.y:
+            return True
+
+        else:
+            return False
+
+
+class LaserPoint:
+    def __init__(self, angle: float, distance: float) -> None:
+        self.angle: float = angle
+        self.distance: float = distance
+
+    def to_laser_point(self, robot_position: Point) -> Point:
+        x: float = math.sin(math.radians(self.angle)) * self.distance + robot_position.x
+        y: float = math.cos(math.radians(self.angle)) * self.distance + robot_position.y
+
+        return Point(x, y)
+
 
 class Lidar:
     START_FLAG: bytes                = b'\xA5'
@@ -47,7 +76,7 @@ class Lidar:
 
         self.ser: Serial = Serial(self.port, self.baudrate, timeout = self.timeout)
 
-        self.frame_buffer: list[list[tuple[float, float]]] = []
+        self.frame_buffer: list[list[LaserPoint]] = []
         self.buffer_size: int = buffer_size
         self.buffer_thread: Thread = Thread(target=self.update_buffer)
 
@@ -177,20 +206,20 @@ class Lidar:
                     continue
 
                 if len(self.frame_buffer) > 0:
-                    self.frame_buffer[len(self.frame_buffer) - 1].append((angle, distance))
+                    self.frame_buffer[len(self.frame_buffer) - 1].append(LaserPoint(angle, distance))
 
             except Exception as e:
                 print(e)
                 return
 
-    def pop_buffer(self) -> list[tuple[float, float]]:
+    def pop_buffer(self) -> list[LaserPoint]:
         while len(self.frame_buffer) < 2:
             if not self.active:
                 return []
 
             time.sleep(0.005)
 
-        buffer: list[tuple[float, float]] = self.frame_buffer.pop(len(self.frame_buffer) - 2)
+        buffer: list[LaserPoint] = self.frame_buffer.pop(len(self.frame_buffer) - 2)
         return buffer
 
     def stop(self) -> None:

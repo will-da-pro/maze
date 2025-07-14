@@ -4,7 +4,9 @@ import math
 import numpy as np
 import pygame
 
-from devices.lidar import Lidar
+from devices.lidar import Lidar, LaserPoint, Point
+from fractions import Fraction
+from scipy import odr
 
 class Landmark:
     def __init__(self, life: int) -> None:
@@ -100,9 +102,219 @@ class Landmarks:
 
 class FeaturesDetection:
     def __init__(self) -> None:
-        pass
+        self.EPSILON: int = 10
+        self.DELTA: int = 501
+        self.SNUM: int = 6
+        self.PMIN: int = 20
+        self.GMAX: int = 20
+        self.SEED_SEGMENTS = []
+        self.LINE_SEGMENTS: list[tuple[Point, Point]] = []
+        self.LASERPOINTS: list[tuple[Point, float]]
+        self.LINE_PARAMS: tuple[float, float, float] | None = None
+        self.NP: int = len(self.LASERPOINTS) - 1
+        self.LMIN: int = 20
+        self.LR: int = 0
+        self.PR: int = 0
 
+    def dist_point2point(self, point1: Point, point2: Point) -> float:
+        Px = (point1.x - point2.x) ** 2
+        Py = (point1.y - point2.y) ** 2
 
+        return math.sqrt(Px + Py)
+
+    def dist_point2line(self, params: tuple[float, float, float], point: Point) -> float:
+        A, B, C = params
+
+        distance: float = abs(A * point.x + B * point.y + C) / math.sqrt(A ** 2 + B ** 2)
+        return distance
+
+    def line_2points(self, m: float, b: float) -> list[tuple[float, float]]:
+        x: float = 5
+        y: float = m * x + b
+        x2: float = 2000
+        y2: float = m * x2 + b
+        return [(x, y), (x2, y2)]
+
+    def lineForm_G2Si(self, A: float, B: float, C: float) -> tuple[float, float]:
+        m: float = -A / B
+        b: float = -C / B
+        return m, b
+
+    def lineForm_Si2G(self, m, b) -> tuple[float, float, float]:
+        A, B, C = -m, 1, -b
+
+        if A < 0:
+            A, B, C = -A, -B, -C
+
+        den_a: float = Fraction(A).limit_denominator(1000).as_integer_ratio()[1]
+        den_c: float = Fraction(C).limit_denominator(1000).as_integer_ratio()[1]
+
+        gcd: float = np.gcd(den_a, den_c)
+        lcm: float = den_a * den_c / gcd
+
+        A = A * lcm
+        B = B * lcm
+        C = C * lcm
+
+        return A, B, C
+
+    def line_intersect_general(self, params1: tuple[float, float, float], params2: tuple[float, float, float]) -> Point:
+        a1, b1, c1 = params1
+        a2, b2, c2 = params2
+
+        x: float = (c1 * b2 - b1 * c2) / (b1 * a2 - a1 * b2)
+        y: float = (a1 * c2 - a2 * c1) / (b1 * a2 - a1 * b2)
+
+        return Point(x, y)
+
+    def points_2line(self, point1: Point, point2: Point) -> tuple[float, float]:
+        m: float = 0
+        b: float = 0
+
+        if point1.x != point2.x:
+            m = (point2.y - point1.y) / (point2.x - point1.x)
+            b = point2.y - m * point2.x
+
+        return m, b
+
+    def projection_point2line(self, point: Point, m: float, b: float) -> Point:
+        m2: float = -1 / m
+        c2: float = point.y - m2 * point.x
+
+        x: float = - (b - c2) / (m - m2)
+        y: float = m2 * x + c2
+
+        return Point(x, y)
+
+    def laser_points_set(self, data: list[LaserPoint], robot_position: Point):
+        self.LASERPOINTS = []
+
+        if not data:
+            pass
+
+        for point in data:
+            coordinates: Point = point.to_laser_point(robot_position)
+            self.LASERPOINTS.append((coordinates, point.angle))
+
+        self.NP = len(self.LASERPOINTS) - 1
+
+    def linear_func(self, p, x) -> float:
+        m, b = p
+        return m * x * b
+
+    def odr_fit(self, laser_points: list[Point]) -> tuple[float, float]:
+        x: np.ndarray = np.array(point.x for point in laser_points)
+        y: np.ndarray = np.array(point.y for point in laser_points)
+
+        linear_model: odr.Model = odr.Model(self.linear_func)
+
+        data: odr.RealData = odr.RealData(x, y)
+
+        odr_model: odr.ODR = odr.ODR(data, linear_model, beta0=[0., 0.])
+
+        out: odr.Output = odr_model.run()
+        m, b = out.beta
+        return m, b
+
+    def predict_point(self, line_params: tuple[float, float, float], sensed_point: Point, robot_position: Point) -> Point:
+        m, b = self.points_2line(robot_position, sensed_point)
+        params1: tuple[float, float, float] = self.lineForm_Si2G(m, b)
+        pred: Point = self.line_intersect_general(params1, line_params)
+
+        return pred
+
+    def seed_segment_detection(self, robot_position: Point, break_point_ind: int) -> tuple[list[tuple[Point, float]], list[Point], tuple[int, int]] | None:
+        flag: bool = True
+
+        self.NP = max(0, self.NP)
+        self.SEED_SEGMENTS = []
+
+        for i in range(break_point_ind, (self.NP - self.PMIN)):
+            predicted_points_to_draw: list[Point] = []
+
+            j: int = i + self.SNUM
+            m, c = self.odr_fit(list(i[0] for i in self.LASERPOINTS)[i:j])
+
+            params: tuple[float, float, float] = self.lineForm_Si2G(m, c)
+
+            for k in range(i, j):
+                predicted_point: Point = self.predict_point(params, self.LASERPOINTS[k][0], robot_position)
+                predicted_points_to_draw.append(predicted_point)
+
+                d1: float = self.dist_point2point(predicted_point, self.LASERPOINTS[k][0])
+
+                if d1 > self.DELTA:
+                    flag = False
+                    break
+
+                d2: float = self.dist_point2line(params, predicted_point)
+                
+                if d2 > self.EPSILON:
+                    flag = False
+                    break
+
+            if flag:
+                self.LINE_PARAMS = params
+                return self.LASERPOINTS[i:j], predicted_points_to_draw, (i, j)
+
+    def seed_segment_growing(self, indices: tuple[int, int], break_point: int) -> tuple[list[tuple[Point, float]], list[tuple[float, float]], Point, Point, int, tuple[float, float, float], tuple[float, float]] | None:
+        line_eq: tuple[float, float, float] | None = self.LINE_PARAMS
+
+        if line_eq is None:
+            return
+
+        i, j = indices
+        PB, PF = max(break_point, i - 1), min(j + 1, len(self.LASERPOINTS) - 1)
+
+        while self.dist_point2line(line_eq, self.LASERPOINTS[PF][0]) < self.EPSILON:
+            if PF > self.NP - 1:
+                break
+
+            else:
+                m, b = self.odr_fit(list(i[0] for i in self.LASERPOINTS)[PB:PF])
+                line_eq = self.lineForm_Si2G(m, b)
+
+            POINT = self.LASERPOINTS[PF][0]
+
+            PF += 1
+            NEXTPOINT: Point = self.LASERPOINTS[PF][0]
+
+            if self.dist_point2point(POINT, NEXTPOINT) > self.GMAX:
+                break
+
+        PF -= 1
+
+        while self.dist_point2line(line_eq, self.LASERPOINTS[PF][0]) < self.EPSILON:
+            if PB < break_point:
+                break
+            
+            else:
+                m, b = self.odr_fit(list(i[0] for i in self.LASERPOINTS)[PB:PF])
+                line_eq = self.lineForm_Si2G(m, b)
+            
+            POINT: Point = self.LASERPOINTS[PB][0]
+
+            PB -= 1
+
+            NEXTPOINT: Point = self.LASERPOINTS[PB][0]
+
+            if self.dist_point2point(POINT, NEXTPOINT) > self.GMAX:
+                break
+
+        PB += 1
+
+        LR: float = self.dist_point2point(self.LASERPOINTS[PB][0], self.LASERPOINTS[PF][0])
+        PR: int = len(self.LASERPOINTS[PB:PF])
+
+        if PR >= self.LMIN and LR >= self.PMIN:
+            self.LINE_PARAMS = line_eq
+            m, b = self.lineForm_G2Si(line_eq[0], line_eq[1], line_eq[2])
+            two_points: list[tuple[float, float]] = self.line_2points(m, b)
+            self.LINE_SEGMENTS.append((self.LASERPOINTS[PB + 1][0], self.LASERPOINTS[PF - 1][0]))
+
+            return self.LASERPOINTS[PB:PF], two_points, self.LASERPOINTS[PB + 1][0], self.LASERPOINTS[PF - 1][0], PF, line_eq, (m, b)
+
+    
 class SLAM:
     def __init__(self, min_x: int = -1000, max_x: int = 1000, min_y: int = -1000, max_y: int = 1000) -> None:
         self.min_x: int = min_x
@@ -118,8 +330,6 @@ class SLAM:
         self.current_x: float = 0
         self.current_y: float = 0
 
-        self.angle_bounds: float = 10
-
     def to_physical(self, logical_x: int, logical_y: int) -> tuple[int, int]:
         physical_x: int = logical_x - self.min_x
         physical_y: int = logical_y - self.min_y
@@ -131,50 +341,7 @@ class SLAM:
         logical_y: int = physical_y + self.min_y
 
         return logical_x, logical_y
-
-    def get_angle_between_points(self, left_point: tuple[float, float], midpoint: tuple[float, float], right_point: tuple[float, float]) -> float:
-        A: tuple[float, float] = math.sin(math.radians(left_point[0])) * left_point[1], math.cos(math.radians(left_point[0])) * left_point[1]
-        B: tuple[float, float] = math.sin(math.radians(midpoint[0])) * midpoint[1], math.cos(math.radians(midpoint[0])) * midpoint[1]
-        C: tuple[float, float] = math.sin(math.radians(right_point[0])) * right_point[1], math.cos(math.radians(right_point[0])) * right_point[1]
-
-        BA: tuple[float, float] = A[0] - B[0], A[1] - B[1]
-        BC: tuple[float, float] = C[0] - B[0], C[1] - B[1]
-
-        denom: float = math.sqrt(BA[0] ** 2 + BA[1] ** 2) * math.sqrt(BC[0] ** 2 + BC[1] ** 2)
-
-        if denom == 0:
-            return 0
-
-        return math.acos((BA[0] * BC[0] + BA[1] * BC[1]) / denom)
-
-    def eliminate_possible_corners(self, scan: list[tuple[float, float]]) -> list[tuple[float, float]]:
-        scan_copy: list[tuple[float, float]] = scan.copy()
-        min_length: int = 15
-        last_angle: int = -1
-
-        for index, point in enumerate(scan):
-            if index == len(scan) - 1:
-                angle: float = self.get_angle_between_points(scan[index - 1], point, scan[0])
-
-            else:
-                angle: float = self.get_angle_between_points(scan[index - 1], point, scan[index + 1])
-
-            if angle < math.radians(180 - self.angle_bounds) or angle > math.radians(180 + self.angle_bounds):
-                scan_copy.remove(point)
-
-                if 1 < index - last_angle and index - last_angle < min_length:
-                    for point2 in scan[last_angle + 1:index - 1]:
-                        scan_copy.remove(point2)
-
-                last_angle = index
-
-        print("final", len(scan_copy))
-        print("old", len(scan))
-        return scan_copy
-
-    def find_lines(self, scan: list[tuple[float, float]]):
-        scan = self.eliminate_possible_corners(scan)
-
+ 
 
 class Robot:
     def __init__(self) -> None:
@@ -186,25 +353,24 @@ lidar.start()
 slam: SLAM = SLAM()
 
 
-pygame.display.init()
-surface = pygame.display.set_mode((800, 800))
+#pygame.display.init()
+#surface = pygame.display.set_mode((800, 800))
 size: int = 800
 
 
 i = 0
-while i < 100000:
+while i < 100:
     graph: np.ndarray = np.zeros((size, size), dtype=np.uint8)
 
-    lidar_data: list[tuple[float, float]] = lidar.pop_buffer()
-    new_data: list[tuple[float, float]] = slam.eliminate_possible_corners(lidar_data)
+    lidar_data: list[LaserPoint] = lidar.pop_buffer()
 
-    surface.fill((0, 0, 0))
-    for point in new_data:
-        x: int = int(1 * math.sin(math.radians(point[0])) * point[1]) + size // 2
-        y: int = -int(1 * math.cos(math.radians(point[0])) * point[1]) + size // 2 
-        pygame.draw.line(surface, (255, 255, 255), (size / 2, size / 2), (x, y), 2)
-        pygame.draw.circle(surface, (255, 0, 0), (x, y), 3)
-    pygame.display.update() 
+    #surface.fill((0, 0, 0))
+    #for point in new_data:
+    #    x: int = int(1 * math.sin(math.radians(point[0])) * point[1]) + size // 2
+    #    y: int = -int(1 * math.cos(math.radians(point[0])) * point[1]) + size // 2 
+    #    pygame.draw.line(surface, (255, 255, 255), (size / 2, size / 2), (x, y), 2)
+    #    pygame.draw.circle(surface, (255, 0, 0), (x, y), 3)
+    #pygame.display.update() 
 
     i += 1
 lidar.stop()
