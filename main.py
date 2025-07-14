@@ -3,6 +3,7 @@
 import math
 import numpy as np
 import pygame
+import random
 
 from devices.lidar import Lidar, LaserPoint, Point
 from fractions import Fraction
@@ -409,11 +410,13 @@ while running:
                 ENDPOINTS[0] = featureMAP.projection_point2line(OUTERMOST[0], m, c)
                 ENDPOINTS[1] = featureMAP.projection_point2line(OUTERMOST[1], m, c)
 
+                r, g, b = random.randint(0, 255), random.randint(0, 255), random.randint(0, 255)
+
                 for point in line_seg:
                     if math.isnan(point[0].x) or math.isnan(point[0].y):
                         continue
 
-                    pygame.draw.circle(surface, (255, 0, 0), (int(point[0].x * scale) + size / 2, int(point[0].y * scale) + size / 2), 3)
+                    pygame.draw.circle(surface, (r, g, b), (int(point[0].x * scale) + size / 2, int(point[0].y * scale) + size / 2), 3)
                     pygame.draw.line(surface, (255, 255, 255), (size / 2, size / 2), (int(point[0].x * scale) + size / 2, int(point[0].y * scale) + size / 2), 2)
 
 
