@@ -23,6 +23,9 @@ class Point:
         else:
             return False
 
+    def __str__(self) -> str:
+        return f"x: {self.x}, y: {self.y}"
+
 
 class LaserPoint:
     def __init__(self, angle: float, distance: float) -> None:

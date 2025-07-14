@@ -105,14 +105,14 @@ class FeaturesDetection:
         self.EPSILON: int = 10
         self.DELTA: int = 501
         self.SNUM: int = 6
-        self.PMIN: int = 20
+        self.PMIN: int = 5
         self.GMAX: int = 20
         self.SEED_SEGMENTS = []
         self.LINE_SEGMENTS: list[tuple[Point, Point]] = []
-        self.LASERPOINTS: list[tuple[Point, float]]
+        self.LASERPOINTS: list[tuple[Point, float]] = []
         self.LINE_PARAMS: tuple[float, float, float] | None = None
         self.NP: int = len(self.LASERPOINTS) - 1
-        self.LMIN: int = 20
+        self.LMIN: int = 2
         self.LR: int = 0
         self.PR: int = 0
 
@@ -203,8 +203,8 @@ class FeaturesDetection:
         return m * x * b
 
     def odr_fit(self, laser_points: list[Point]) -> tuple[float, float]:
-        x: np.ndarray = np.array(point.x for point in laser_points)
-        y: np.ndarray = np.array(point.y for point in laser_points)
+        x: np.ndarray = np.array([point.x for point in laser_points])
+        y: np.ndarray = np.array([point.y for point in laser_points])
 
         linear_model: odr.Model = odr.Model(self.linear_func)
 
@@ -257,7 +257,7 @@ class FeaturesDetection:
                 self.LINE_PARAMS = params
                 return self.LASERPOINTS[i:j], predicted_points_to_draw, (i, j)
 
-    def seed_segment_growing(self, indices: tuple[int, int], break_point: int) -> tuple[list[tuple[Point, float]], list[tuple[float, float]], Point, Point, int, tuple[float, float, float], tuple[float, float]] | None:
+    def seed_segment_growing(self, indices: tuple[int, int], break_point: int) -> list | None:
         line_eq: tuple[float, float, float] | None = self.LINE_PARAMS
 
         if line_eq is None:
@@ -306,13 +306,16 @@ class FeaturesDetection:
         LR: float = self.dist_point2point(self.LASERPOINTS[PB][0], self.LASERPOINTS[PF][0])
         PR: int = len(self.LASERPOINTS[PB:PF])
 
-        if PR >= self.LMIN and LR >= self.PMIN:
+        print(LR, PR)
+
+        if LR >= self.LMIN and PR >= self.PMIN:
+            print("Good grow")
             self.LINE_PARAMS = line_eq
             m, b = self.lineForm_G2Si(line_eq[0], line_eq[1], line_eq[2])
             two_points: list[tuple[float, float]] = self.line_2points(m, b)
             self.LINE_SEGMENTS.append((self.LASERPOINTS[PB + 1][0], self.LASERPOINTS[PF - 1][0]))
 
-            return self.LASERPOINTS[PB:PF], two_points, self.LASERPOINTS[PB + 1][0], self.LASERPOINTS[PF - 1][0], PF, line_eq, (m, b)
+            return [self.LASERPOINTS[PB:PF], two_points, self.LASERPOINTS[PB + 1][0], self.LASERPOINTS[PF - 1][0], PF, line_eq, (m, b)]
 
     
 class SLAM:
@@ -353,24 +356,74 @@ lidar.start()
 slam: SLAM = SLAM()
 
 
-#pygame.display.init()
-#surface = pygame.display.set_mode((800, 800))
+pygame.init()
+surface = pygame.display.set_mode((800, 800))
 size: int = 800
+scale: float = 0.2
 
+featureMAP: FeaturesDetection = FeaturesDetection()
 
-i = 0
-while i < 100:
+running: bool = True
+
+while running:
+    for event in pygame.event.get():
+        if event.type == pygame.QUIT:
+            running = False
+
+    BREAK_POINT_IND: int = 0
+
     graph: np.ndarray = np.zeros((size, size), dtype=np.uint8)
 
     lidar_data: list[LaserPoint] = lidar.pop_buffer()
 
-    #surface.fill((0, 0, 0))
-    #for point in new_data:
-    #    x: int = int(1 * math.sin(math.radians(point[0])) * point[1]) + size // 2
-    #    y: int = -int(1 * math.cos(math.radians(point[0])) * point[1]) + size // 2 
-    #    pygame.draw.line(surface, (255, 255, 255), (size / 2, size / 2), (x, y), 2)
-    #    pygame.draw.circle(surface, (255, 0, 0), (x, y), 3)
-    #pygame.display.update() 
+    featureMAP.laser_points_set(lidar_data, Point(0, 0))
 
-    i += 1
+    ENDPOINTS: list[Point | int] = [0, 0]
+    surface.fill((0, 0, 0))
+
+    while BREAK_POINT_IND < (featureMAP.NP - featureMAP.PMIN):
+        seedSeg = featureMAP.seed_segment_detection(Point(0, 0), BREAK_POINT_IND)
+        print(BREAK_POINT_IND, seedSeg)
+
+        if seedSeg is None:
+            break
+
+        else:
+            seedSegment, PREDICTED_POINTS_TODRAW, INDICES = seedSeg
+            results = featureMAP.seed_segment_growing(INDICES, BREAK_POINT_IND)
+            print("Results: ", results)
+
+            if results is None:
+                BREAK_POINT_IND = INDICES[1]
+                continue
+
+            else:
+                line_eq: tuple[float, float] = results[5]
+                m, c = results[6]
+                line_seg: list[tuple[Point, float]] = results[0]
+                OUTERMOST = (results[2], results[3])
+                BREAK_POINT_IND = results[4]
+
+                print(line_eq, m, c, line_seg, OUTERMOST, BREAK_POINT_IND)
+
+                ENDPOINTS[0] = featureMAP.projection_point2line(OUTERMOST[0], m, c)
+                ENDPOINTS[1] = featureMAP.projection_point2line(OUTERMOST[1], m, c)
+
+                for point in line_seg:
+                    if math.isnan(point[0].x) or math.isnan(point[0].y):
+                        continue
+
+                    pygame.draw.circle(surface, (255, 0, 0), (int(point[0].x * scale) + size / 2, int(point[0].y * scale) + size / 2), 3)
+                    pygame.draw.line(surface, (255, 255, 255), (size / 2, size / 2), (int(point[0].x * scale) + size / 2, int(point[0].y * scale) + size / 2), 2)
+
+
+                print("Endpoints:", ENDPOINTS[0], ENDPOINTS[1])
+
+                if math.isnan(ENDPOINTS[0].x) or math.isnan(ENDPOINTS[0].y) or math.isnan(ENDPOINTS[1].x) or math.isnan(ENDPOINTS[1].y):
+                    continue
+
+                pygame.draw.line(surface, (0, 255, 0), (int(ENDPOINTS[0].x * scale + size / 2), int(ENDPOINTS[0].y) * scale + size / 2), (int(ENDPOINTS[1].x * scale + size / 2), int(ENDPOINTS[1].y * scale + size / 2)), 2)
+
+    pygame.display.update() 
+
 lidar.stop()
