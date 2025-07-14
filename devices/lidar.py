@@ -47,7 +47,7 @@ class Lidar:
 
         self.ser: Serial = Serial(self.port, self.baudrate, timeout = self.timeout)
 
-        self.frame_buffer: list[dict[float, float]] = []
+        self.frame_buffer: list[list[tuple[float, float]]] = []
         self.buffer_size: int = buffer_size
         self.buffer_thread: Thread = Thread(target=self.update_buffer)
 
@@ -168,7 +168,7 @@ class Lidar:
                     continue
 
                 if new_scan:
-                    self.frame_buffer.append({})
+                    self.frame_buffer.append([])
 
                 if len(self.frame_buffer) > self.buffer_size:
                     self.frame_buffer.pop(0)
@@ -177,20 +177,20 @@ class Lidar:
                     continue
 
                 if len(self.frame_buffer) > 0:
-                    self.frame_buffer[len(self.frame_buffer) - 1][angle] = distance
+                    self.frame_buffer[len(self.frame_buffer) - 1].append((angle, distance))
 
             except Exception as e:
                 print(e)
                 return
 
-    def pop_buffer(self) -> dict[float, float]:
+    def pop_buffer(self) -> list[tuple[float, float]]:
         while len(self.frame_buffer) < 2:
             if not self.active:
-                return {}
+                return []
 
             time.sleep(0.005)
 
-        buffer: dict[float, float] = self.frame_buffer.pop(len(self.frame_buffer) - 2)
+        buffer: list[tuple[float, float]] = self.frame_buffer.pop(len(self.frame_buffer) - 2)
         return buffer
 
     def stop(self) -> None:

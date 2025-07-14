@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 
+import math
 import numpy as np
+import pygame
 
 from devices.lidar import Lidar
-from math import sin, cos, radians
 
 class Landmark:
     def __init__(self, life: int) -> None:
@@ -78,21 +79,28 @@ class Landmarks:
         x_bounds: np.ndarray = np.zeros(4, dtype=float)
         y_bounds: np.ndarray = np.zeros(4, dtype=float)
 
-        x_bounds[0] = cos(radians(self.degrees_per_scan) + radians(robot_angle)) * self.MAX_RANGE + robot_position[0]
-        y_bounds[0] = sin(radians(self.degrees_per_scan) + radians(robot_angle)) * self.MAX_RANGE + robot_position[1]
+        x_bounds[0] = math.cos(math.radians(self.degrees_per_scan) + math.radians(robot_angle)) * self.MAX_RANGE + robot_position[0]
+        y_bounds[0] = math.sin(math.radians(self.degrees_per_scan) + math.radians(robot_angle)) * self.MAX_RANGE + robot_position[1]
 
-        x_bounds[1] = x_bounds[0] + cos(radians(180 * self.degrees_per_scan) + radians(robot_angle)) * self.MAX_RANGE
-        y_bounds[1] = y_bounds[0] + sin(radians(180 * self.degrees_per_scan) + radians(robot_angle)) * self.MAX_RANGE
+        x_bounds[1] = x_bounds[0] + math.cos(math.radians(180 * self.degrees_per_scan) + math.radians(robot_angle)) * self.MAX_RANGE
+        y_bounds[1] = y_bounds[0] + math.sin(math.radians(180 * self.degrees_per_scan) + math.radians(robot_angle)) * self.MAX_RANGE
         
-        x_bounds[2] = cos(radians(359 * self.degrees_per_scan) + radians(robot_angle)) * self.MAX_RANGE + robot_position[0]
-        y_bounds[2] = sin(radians(359 * self.degrees_per_scan) + radians(robot_angle)) * self.MAX_RANGE + robot_position[1]
+        x_bounds[2] = math.cos(math.radians(359 * self.degrees_per_scan) + math.radians(robot_angle)) * self.MAX_RANGE + robot_position[0]
+        y_bounds[2] = math.sin(math.radians(359 * self.degrees_per_scan) + math.radians(robot_angle)) * self.MAX_RANGE + robot_position[1]
 
-        x_bounds[3] = x_bounds[2] + cos(radians(180 * self.degrees_per_scan) + radians(robot_angle)) * self.MAX_RANGE
-        y_bounds[3] = y_bounds[2] + sin(radians(180 * self.degrees_per_scan) + radians(robot_angle)) * self.MAX_RANGE
+        x_bounds[3] = x_bounds[2] + math.cos(math.radians(180 * self.degrees_per_scan) + math.radians(robot_angle)) * self.MAX_RANGE
+        y_bounds[3] = y_bounds[2] + math.sin(math.radians(180 * self.degrees_per_scan) + math.radians(robot_angle)) * self.MAX_RANGE
 
         for index, landmark in enumerate(self.landmark_db):
             pnt_x: float = landmark.x_pos
             pnt_y: float = landmark.y_pos
+
+            print(pnt_x, pnt_y)
+
+
+class FeaturesDetection:
+    def __init__(self) -> None:
+        pass
 
 
 class SLAM:
@@ -110,6 +118,8 @@ class SLAM:
         self.current_x: float = 0
         self.current_y: float = 0
 
+        self.angle_bounds: float = 10
+
     def to_physical(self, logical_x: int, logical_y: int) -> tuple[int, int]:
         physical_x: int = logical_x - self.min_x
         physical_y: int = logical_y - self.min_y
@@ -122,6 +132,49 @@ class SLAM:
 
         return logical_x, logical_y
 
+    def get_angle_between_points(self, left_point: tuple[float, float], midpoint: tuple[float, float], right_point: tuple[float, float]) -> float:
+        A: tuple[float, float] = math.sin(math.radians(left_point[0])) * left_point[1], math.cos(math.radians(left_point[0])) * left_point[1]
+        B: tuple[float, float] = math.sin(math.radians(midpoint[0])) * midpoint[1], math.cos(math.radians(midpoint[0])) * midpoint[1]
+        C: tuple[float, float] = math.sin(math.radians(right_point[0])) * right_point[1], math.cos(math.radians(right_point[0])) * right_point[1]
+
+        BA: tuple[float, float] = A[0] - B[0], A[1] - B[1]
+        BC: tuple[float, float] = C[0] - B[0], C[1] - B[1]
+
+        denom: float = math.sqrt(BA[0] ** 2 + BA[1] ** 2) * math.sqrt(BC[0] ** 2 + BC[1] ** 2)
+
+        if denom == 0:
+            return 0
+
+        return math.acos((BA[0] * BC[0] + BA[1] * BC[1]) / denom)
+
+    def eliminate_possible_corners(self, scan: list[tuple[float, float]]) -> list[tuple[float, float]]:
+        scan_copy: list[tuple[float, float]] = scan.copy()
+        min_length: int = 15
+        last_angle: int = -1
+
+        for index, point in enumerate(scan):
+            if index == len(scan) - 1:
+                angle: float = self.get_angle_between_points(scan[index - 1], point, scan[0])
+
+            else:
+                angle: float = self.get_angle_between_points(scan[index - 1], point, scan[index + 1])
+
+            if angle < math.radians(180 - self.angle_bounds) or angle > math.radians(180 + self.angle_bounds):
+                scan_copy.remove(point)
+
+                if 1 < index - last_angle and index - last_angle < min_length:
+                    for point2 in scan[last_angle + 1:index - 1]:
+                        scan_copy.remove(point2)
+
+                last_angle = index
+
+        print("final", len(scan_copy))
+        print("old", len(scan))
+        return scan_copy
+
+    def find_lines(self, scan: list[tuple[float, float]]):
+        scan = self.eliminate_possible_corners(scan)
+
 
 class Robot:
     def __init__(self) -> None:
@@ -130,8 +183,28 @@ class Robot:
 
 lidar: Lidar = Lidar.init_c3()
 lidar.start()
+slam: SLAM = SLAM()
+
+
+pygame.display.init()
+surface = pygame.display.set_mode((800, 800))
+size: int = 800
+
+
 i = 0
 while i < 100000:
-    print(lidar.pop_buffer())
+    graph: np.ndarray = np.zeros((size, size), dtype=np.uint8)
+
+    lidar_data: list[tuple[float, float]] = lidar.pop_buffer()
+    new_data: list[tuple[float, float]] = slam.eliminate_possible_corners(lidar_data)
+
+    surface.fill((0, 0, 0))
+    for point in new_data:
+        x: int = int(1 * math.sin(math.radians(point[0])) * point[1]) + size // 2
+        y: int = -int(1 * math.cos(math.radians(point[0])) * point[1]) + size // 2 
+        pygame.draw.line(surface, (255, 255, 255), (size / 2, size / 2), (x, y), 2)
+        pygame.draw.circle(surface, (255, 0, 0), (x, y), 3)
+    pygame.display.update() 
+
     i += 1
 lidar.stop()
