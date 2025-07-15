@@ -104,7 +104,7 @@ class Landmarks:
 class FeaturesDetection:
     def __init__(self) -> None:
         self.EPSILON: int = 10
-        self.DELTA: int = 501
+        self.DELTA: int = 1000
         self.SNUM: int = 6
         self.PMIN: int = 5
         self.GMAX: int = 20
@@ -207,14 +207,19 @@ class FeaturesDetection:
         x: np.ndarray = np.array([point.x for point in laser_points])
         y: np.ndarray = np.array([point.y for point in laser_points])
 
+        print("Model X:", x)
+        print("Model Y:", y)
+
         linear_model: odr.Model = odr.Model(self.linear_func)
 
-        data: odr.RealData = odr.RealData(x, y)
+        data: odr.RealData = odr.RealData(x, y, sx=1, sy=1/np.var(y))
 
         odr_model: odr.ODR = odr.ODR(data, linear_model, beta0=[0., 0.])
 
         out: odr.Output = odr_model.run()
+        print(out.stopreason)
         m, b = out.beta
+        print(out.beta)
         return m, b
 
     def predict_point(self, line_params: tuple[float, float, float], sensed_point: Point, robot_position: Point) -> Point:
@@ -272,7 +277,9 @@ class FeaturesDetection:
                 break
 
             else:
-                m, b = self.odr_fit(list(i[0] for i in self.LASERPOINTS)[PB:PF])
+                m, b = self.odr_fit([i[0] for i in self.LASERPOINTS][PB:PF])
+                print("1)", m, b)
+                print([str(i[0]) for i in self.LASERPOINTS][PB:PF])
                 line_eq = self.lineForm_Si2G(m, b)
 
             POINT = self.LASERPOINTS[PF][0]
@@ -290,7 +297,9 @@ class FeaturesDetection:
                 break
             
             else:
-                m, b = self.odr_fit(list(i[0] for i in self.LASERPOINTS)[PB:PF])
+                m, b = self.odr_fit([i[0] for i in self.LASERPOINTS][PB:PF])
+                print("2)", m, b)
+                print([str(i[0]) for i in self.LASERPOINTS][PB:PF])
                 line_eq = self.lineForm_Si2G(m, b)
             
             POINT: Point = self.LASERPOINTS[PB][0]
@@ -315,6 +324,8 @@ class FeaturesDetection:
             m, b = self.lineForm_G2Si(line_eq[0], line_eq[1], line_eq[2])
             two_points: list[tuple[float, float]] = self.line_2points(m, b)
             self.LINE_SEGMENTS.append((self.LASERPOINTS[PB + 1][0], self.LASERPOINTS[PF - 1][0]))
+
+            print("Line Equation:", line_eq)
 
             return [self.LASERPOINTS[PB:PF], two_points, self.LASERPOINTS[PB + 1][0], self.LASERPOINTS[PF - 1][0], PF, line_eq, (m, b)]
 
@@ -367,6 +378,7 @@ featureMAP: FeaturesDetection = FeaturesDetection()
 running: bool = True
 
 while running:
+    print("\n\nNEW SCAN\n\n")
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             running = False
@@ -405,7 +417,7 @@ while running:
                 OUTERMOST = (results[2], results[3])
                 BREAK_POINT_IND = results[4]
 
-                print(line_eq, m, c, line_seg, OUTERMOST, BREAK_POINT_IND)
+                print(line_eq, m, c, [(str(i[0]), i[1]) for i in line_seg], OUTERMOST, BREAK_POINT_IND)
 
                 ENDPOINTS[0] = featureMAP.projection_point2line(OUTERMOST[0], m, c)
                 ENDPOINTS[1] = featureMAP.projection_point2line(OUTERMOST[1], m, c)
