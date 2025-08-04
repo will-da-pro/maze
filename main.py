@@ -98,15 +98,15 @@ class Landmarks:
             pnt_x: float = landmark.x_pos
             pnt_y: float = landmark.y_pos
 
-            print(pnt_x, pnt_y)
+            #print(pnt_x, pnt_y)
 
 
 class FeaturesDetection:
     def __init__(self) -> None:
-        self.EPSILON: int = 10
-        self.DELTA: int = 1000
+        self.EPSILON: int = 100
+        self.DELTA: int = 10
         self.SNUM: int = 6
-        self.PMIN: int = 5
+        self.PMIN: int = 10
         self.GMAX: int = 20
         self.SEED_SEGMENTS = []
         self.LINE_SEGMENTS: list[tuple[Point, Point]] = []
@@ -207,19 +207,22 @@ class FeaturesDetection:
         x: np.ndarray = np.array([point.x for point in laser_points])
         y: np.ndarray = np.array([point.y for point in laser_points])
 
-        print("Model X:", x)
-        print("Model Y:", y)
+        #print("Model X:", x)
+        #print("Model Y:", y)
 
-        linear_model: odr.Model = odr.Model(self.linear_func)
+        #linear_model: odr.Model = odr.Model(self.linear_func)
 
-        data: odr.RealData = odr.RealData(x, y, sx=1, sy=1/np.var(y))
+        #data: odr.RealData = odr.RealData(x, y, sx=1, sy=1/np.var(y))
 
-        odr_model: odr.ODR = odr.ODR(data, linear_model, beta0=[0., 0.])
+        #odr_model: odr.ODR = odr.ODR(data, linear_model, beta0=[0., 0.])
 
-        out: odr.Output = odr_model.run()
-        print(out.stopreason)
-        m, b = out.beta
-        print(out.beta)
+        #out: odr.Output = odr_model.run()
+        #print(out.stopreason)
+        #m, b = out.beta
+        #print(out.beta)
+
+        m, b = np.polyfit(x, y, 1)
+
         return m, b
 
     def predict_point(self, line_params: tuple[float, float, float], sensed_point: Point, robot_position: Point) -> Point:
@@ -278,8 +281,8 @@ class FeaturesDetection:
 
             else:
                 m, b = self.odr_fit([i[0] for i in self.LASERPOINTS][PB:PF])
-                print("1)", m, b)
-                print([str(i[0]) for i in self.LASERPOINTS][PB:PF])
+                #print("1)", m, b)
+                #print([str(i[0]) for i in self.LASERPOINTS][PB:PF])
                 line_eq = self.lineForm_Si2G(m, b)
 
             POINT = self.LASERPOINTS[PF][0]
@@ -298,8 +301,8 @@ class FeaturesDetection:
             
             else:
                 m, b = self.odr_fit([i[0] for i in self.LASERPOINTS][PB:PF])
-                print("2)", m, b)
-                print([str(i[0]) for i in self.LASERPOINTS][PB:PF])
+                #print("2)", m, b)
+                #print([str(i[0]) for i in self.LASERPOINTS][PB:PF])
                 line_eq = self.lineForm_Si2G(m, b)
             
             POINT: Point = self.LASERPOINTS[PB][0]
@@ -316,16 +319,16 @@ class FeaturesDetection:
         LR: float = self.dist_point2point(self.LASERPOINTS[PB][0], self.LASERPOINTS[PF][0])
         PR: int = len(self.LASERPOINTS[PB:PF])
 
-        print(LR, PR)
+        #print(LR, PR)
 
         if LR >= self.LMIN and PR >= self.PMIN:
-            print("Good grow")
+            #print("Good grow")
             self.LINE_PARAMS = line_eq
             m, b = self.lineForm_G2Si(line_eq[0], line_eq[1], line_eq[2])
             two_points: list[tuple[float, float]] = self.line_2points(m, b)
             self.LINE_SEGMENTS.append((self.LASERPOINTS[PB + 1][0], self.LASERPOINTS[PF - 1][0]))
 
-            print("Line Equation:", line_eq)
+            #print("Line Equation:", line_eq)
 
             return [self.LASERPOINTS[PB:PF], two_points, self.LASERPOINTS[PB + 1][0], self.LASERPOINTS[PF - 1][0], PF, line_eq, (m, b)]
 
@@ -396,15 +399,15 @@ while running:
 
     while BREAK_POINT_IND < (featureMAP.NP - featureMAP.PMIN):
         seedSeg = featureMAP.seed_segment_detection(Point(0, 0), BREAK_POINT_IND)
-        print(BREAK_POINT_IND, seedSeg)
+        #print(BREAK_POINT_IND, seedSeg)
 
         if seedSeg is None:
-            break
+            BREAK_POINT_IND += 1
 
         else:
             seedSegment, PREDICTED_POINTS_TODRAW, INDICES = seedSeg
             results = featureMAP.seed_segment_growing(INDICES, BREAK_POINT_IND)
-            print("Results: ", results)
+            #print("Results: ", results)
 
             if results is None:
                 BREAK_POINT_IND = INDICES[1]
@@ -417,22 +420,22 @@ while running:
                 OUTERMOST = (results[2], results[3])
                 BREAK_POINT_IND = results[4]
 
-                print(line_eq, m, c, [(str(i[0]), i[1]) for i in line_seg], OUTERMOST, BREAK_POINT_IND)
+                #print(line_eq, m, c, [(str(i[0]), i[1]) for i in line_seg], OUTERMOST, BREAK_POINT_IND)
 
                 ENDPOINTS[0] = featureMAP.projection_point2line(OUTERMOST[0], m, c)
                 ENDPOINTS[1] = featureMAP.projection_point2line(OUTERMOST[1], m, c)
 
-                r, g, b = random.randint(0, 255), random.randint(0, 255), random.randint(0, 255)
+                #r, g, b = random.randint(0, 255), random.randint(0, 255), random.randint(0, 255)
 
-                for point in line_seg:
-                    if math.isnan(point[0].x) or math.isnan(point[0].y):
-                        continue
+                #for point in line_seg:
+                    #if math.isnan(point[0].x) or math.isnan(point[0].y):
+                    #    continue
 
-                    pygame.draw.circle(surface, (r, g, b), (int(point[0].x * scale) + size / 2, int(point[0].y * scale) + size / 2), 3)
-                    pygame.draw.line(surface, (255, 255, 255), (size / 2, size / 2), (int(point[0].x * scale) + size / 2, int(point[0].y * scale) + size / 2), 2)
+                    #pygame.draw.circle(surface, (r, g, b), (int(point[0].x * scale) + size / 2, int(point[0].y * scale) + size / 2), 3)
+                    #pygame.draw.line(surface, (255, 255, 255), (size / 2, size / 2), (int(point[0].x * scale) + size / 2, int(point[0].y * scale) + size / 2), 2)
 
 
-                print("Endpoints:", ENDPOINTS[0], ENDPOINTS[1])
+                #print("Endpoints:", ENDPOINTS[0], ENDPOINTS[1])
 
                 if math.isnan(ENDPOINTS[0].x) or math.isnan(ENDPOINTS[0].y) or math.isnan(ENDPOINTS[1].x) or math.isnan(ENDPOINTS[1].y):
                     continue
