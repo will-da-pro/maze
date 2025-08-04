@@ -7,7 +7,7 @@ import random
 
 from devices.lidar import Lidar, LaserPoint, Point
 from fractions import Fraction
-from scipy import odr
+from scipy import odr, stats
 
 class Landmark:
     def __init__(self, life: int) -> None:
@@ -103,7 +103,7 @@ class Landmarks:
 
 class FeaturesDetection:
     def __init__(self) -> None:
-        self.EPSILON: int = 100
+        self.EPSILON: int = 15
         self.DELTA: int = 10
         self.SNUM: int = 6
         self.PMIN: int = 10
@@ -221,7 +221,8 @@ class FeaturesDetection:
         #m, b = out.beta
         #print(out.beta)
 
-        m, b = np.polyfit(x, y, 1)
+        #m, b = np.polyfit(x, y, 1)
+        m, b, r, p, err = stats.linregress(x, y)
 
         return m, b
 
@@ -402,7 +403,7 @@ while running:
         #print(BREAK_POINT_IND, seedSeg)
 
         if seedSeg is None:
-            BREAK_POINT_IND += 1
+            BREAK_POINT_IND += 10
 
         else:
             seedSegment, PREDICTED_POINTS_TODRAW, INDICES = seedSeg
@@ -425,14 +426,14 @@ while running:
                 ENDPOINTS[0] = featureMAP.projection_point2line(OUTERMOST[0], m, c)
                 ENDPOINTS[1] = featureMAP.projection_point2line(OUTERMOST[1], m, c)
 
-                #r, g, b = random.randint(0, 255), random.randint(0, 255), random.randint(0, 255)
+                r, g, b = random.randint(0, 255), random.randint(0, 255), random.randint(0, 255)
 
-                #for point in line_seg:
-                    #if math.isnan(point[0].x) or math.isnan(point[0].y):
-                    #    continue
+                for point in line_seg:
+                    if math.isnan(point[0].x) or math.isnan(point[0].y):
+                        continue
 
-                    #pygame.draw.circle(surface, (r, g, b), (int(point[0].x * scale) + size / 2, int(point[0].y * scale) + size / 2), 3)
-                    #pygame.draw.line(surface, (255, 255, 255), (size / 2, size / 2), (int(point[0].x * scale) + size / 2, int(point[0].y * scale) + size / 2), 2)
+                    pygame.draw.circle(surface, (r, g, b), (int(point[0].x * scale) + size / 2, int(point[0].y * scale) + size / 2), 3)
+                    pygame.draw.line(surface, (255, 255, 255), (size / 2, size / 2), (int(point[0].x * scale) + size / 2, int(point[0].y * scale) + size / 2), 2)
 
 
                 #print("Endpoints:", ENDPOINTS[0], ENDPOINTS[1])
