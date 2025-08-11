@@ -6,6 +6,11 @@ from geometry_msgs.msg import Twist
 import serial
 
 class TwistSubscriber(Node):
+    START_FLAG: bytes = b'\x5A'
+
+    DRIVE_REQUEST: bytes = b'\x30'
+    STOP_REQUEST: bytes = b'\x31'
+
     def __init__(self):
         super().__init__("twist_subscriber")
         self.subscription = self.create_subscription(
@@ -15,12 +20,17 @@ class TwistSubscriber(Node):
                 10
         )
 
+        self.ser = serial.Serial("/dev/ttyAMA10", 115200)
+
         self.get_logger().info("Twist subscriber node started!")
 
     def twist_callback(self, msg):
         linear_x = msg.linear.x
         angular_z = msg.angular.z
-        self.get_logger().info(f'Received Twist: Linear X={linear_x}, Angular Z={angular_z}')
+
+        self.ser.write(self.START_FLAG + self.DRIVE_REQUEST + int(linear_x).to_bytes(1) + int(angular_z).to_bytes(1))
+
+        #self.get_logger().info(f'Received Twist: Linear X={linear_x}, Angular Z={angular_z}')
 
 def main(args=None):
     rclpy.init(args=args)
