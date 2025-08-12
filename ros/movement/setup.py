@@ -24,6 +24,7 @@ setup(
             'twist-subscriber = movement.twist_subscriber:main',
             'odom-publisher = movement.odom_publisher:main',
             'tf2-publisher = movement.tf2_publisher:main',
+            'map-subscriber = movement.map_subscriber:main',
         ],
     },
 )

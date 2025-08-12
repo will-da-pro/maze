@@ -7,7 +7,7 @@ import math
 import serial
 
 class OdomPublisher(Node):
-    START_FLAG: bytes = b'\x5A'
+    START_FLAG: bytes = b'\xA5'
 
     ENCODER_REQUEST: bytes = b'\x40'
     ENCODER_RESPONSE: bytes = b'\x41'
@@ -24,20 +24,28 @@ class OdomPublisher(Node):
         self.vx = 0.0  # m/s
         self.vth = 0.0  # rad/s
 
-        self.ser = serial.Serial("/dev/ttyAMA10", 115200)
+        self.ser = serial.Serial("/dev/ttyAMA0", 115200, timeout=1)
+        self.get_logger().info(f"Serial connected: {'y' if self.ser.is_open else 'n'}")
+        self.get_logger().info(str(self.ser))
         
         self.wheel_dist = 0.185 # m
         self.counts_per_revolution = 480
-        self.wheel_radius = 0.4
+        self.wheel_radius = 0.04
         self.wheel_circumefrence = math.pi * (self.wheel_radius ** 2)
 
     def get_encoders(self):
-        msg = self.ser.read(10)
+        self.ser.write(self.START_FLAG + self.ENCODER_REQUEST)
+        msg = self.ser.read(18)
 
-        if msg[0] != self.START_FLAG:
+        if len(msg) < 18:
+            self.get_logger().warn(f"Wrong Size ({len(msg)})")
+
+        if msg[0:1] != self.START_FLAG:
+            self.get_logger().warn(f"Incorrect Start Flag ({msg[0]})")
             return
 
-        if msg[1] != self.ENCODER_RESOPNSE:
+        if msg[1:2] != self.ENCODER_RESPONSE:
+            self.get_logger().warn(f"Incorrect Response Byte ({msg[1]})")
             return
 
         enc_a = int.from_bytes(msg[2:6], signed=True)
@@ -52,10 +60,17 @@ class OdomPublisher(Node):
         current_time = self.get_clock().now()
         dt = 0.1  # seconds since last update
  
-        enc_a, enc_b, speed_a, speed_b = self.get_encoders()
+        enc_data = self.get_encoders()
 
-        vel_a = speed_a / self.counts_per_revolution * self.wheel_radius
-        vel_b = speed_b / self.counts_per_revolution * self.wheel_radius
+        if enc_data is None:
+            return
+
+        enc_a, enc_b, speed_a, speed_b = enc_data
+
+        angular_vel_mult = 2 * math.pi * self.wheel_radius / self.counts_per_revolution
+
+        vel_a = speed_a * angular_vel_mult
+        vel_b = speed_b * angular_vel_mult
 
         self.vx = (vel_a + vel_b) / 2
         self.vth = (vel_b - vel_a) / self.wheel_dist
