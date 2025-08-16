@@ -1,10 +1,10 @@
+import math
 import rclpy
+import serial
 from rclpy.node import Node
 from nav_msgs.msg import Odometry
 from geometry_msgs.msg import Pose, Point, Quaternion, Twist, Vector3
 from builtin_interfaces.msg import Time
-import math
-import serial
 
 class OdomPublisher(Node):
     START_FLAG: bytes = b'\xA5'
@@ -101,6 +101,7 @@ class OdomPublisher(Node):
         )
 
         self.publisher_.publish(odom)
+
         #self.get_logger().info(f'Published Odometry: x={self.x:.2f}, y={self.y:.2f}, th={self.th:.2f}')
 
     def euler_to_quaternion(self, roll, pitch, yaw):

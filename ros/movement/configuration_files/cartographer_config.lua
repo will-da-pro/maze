@@ -9,7 +9,7 @@ options = {
   published_frame = "base_link",
   odom_frame = "odom",
   provide_odom_frame = true,
-  use_odometry = false,
+  use_odometry = true,
   use_nav_sat = false,
   use_landmarks = false,
   publish_frame_projected_to_2d = true,
@@ -38,4 +38,3 @@ TRAJECTORY_BUILDER_2D.use_imu_data = false
 TRAJECTORY_BUILDER_2D.voxel_filter_size = 0.025
 
 return options
-

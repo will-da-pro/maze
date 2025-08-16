@@ -1,3 +1,5 @@
+import os
+from glob import glob
 from setuptools import find_packages, setup
 
 package_name = 'movement'
@@ -10,21 +12,21 @@ setup(
         ('share/ament_index/resource_index/packages',
             ['resource/' + package_name]),
         ('share/' + package_name, ['package.xml']),
+        (os.path.join('share', package_name, 'configuration_files'), glob('configuration_files/*')),
+        (os.path.join('share', package_name), glob('launch/*.launch.py'))
     ],
     install_requires=['setuptools'],
     zip_safe=True,
-    maintainer='root',
-    maintainer_email='root@todo.todo',
-    description='TODO: Package description',
-    license='TODO: License declaration',
+    maintainer='William D\'Olier',
+    maintainer_email='william@dolier.net',
+    description='Package for Robocup Jr maze robot',
+    license='GPL',
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
-            'talker = movement.movement_node:main',
-            'twist-subscriber = movement.twist_subscriber:main',
-            'odom-publisher = movement.odom_publisher:main',
-            'tf2-publisher = movement.tf2_publisher:main',
-            'map-subscriber = movement.map_subscriber:main',
+            'twist_subscriber = movement.twist_subscriber:main',
+            'odom_publisher = movement.odom_publisher:main',
+            'map_subscriber = movement.map_subscriber:main',
         ],
     },
 )
