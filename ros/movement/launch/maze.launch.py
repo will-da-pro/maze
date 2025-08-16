@@ -11,7 +11,6 @@ def generate_launch_description():
     )
 
     cartographer_config_basename = 'cartographer_config.lua'
-    nav2_config_basename = 'nav2_config.yaml'
 
     sllidar_launch_path = os.path.join(
         get_package_share_directory('sllidar_ros2'),
@@ -20,14 +19,8 @@ def generate_launch_description():
     )
 
     nav2_launch_path = os.path.join(
-        get_package_share_directory('nav2_bringup'),
-        'launch',
-        'navigation_launch.py'
-    )
-
-    nav2_config_path = os.path.join(
-        config_dir,
-        nav2_config_basename
+        get_package_share_directory('movement'),
+        'custom_nav2.launch.py'
     )
 
     return LaunchDescription([
@@ -96,6 +89,5 @@ def generate_launch_description():
 
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource(nav2_launch_path),
-            launch_arguments={'params_file': nav2_config_path}.items()
         ),
     ])
