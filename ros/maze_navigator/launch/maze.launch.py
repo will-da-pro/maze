@@ -27,6 +27,13 @@ def generate_launch_description():
             output='screen',
         ),
 
+        Node(
+            package='maze_navigator',
+            executable='navigator_node',
+            name='navigator_node',
+            output='screen',
+        ),
+
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource(sllidar_launch_path),
         ),

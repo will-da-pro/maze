@@ -39,6 +39,7 @@ class OdomPublisher(Node):
 
         if len(msg) < 18:
             self.get_logger().warn(f"Wrong Size ({len(msg)})")
+            return
 
         if msg[0:1] != self.START_FLAG:
             self.get_logger().warn(f"Incorrect Start Flag ({msg[0]})")
