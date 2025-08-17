@@ -40,5 +40,5 @@ RUN cd /app \
 COPY docker_entrypoint.sh /app/
 
 ENTRYPOINT ["/app/docker_entrypoint.sh"]
-CMD ["bash"]
+CMD ["ros2", "launch", "maze_navigator", "maze.launch.py"]
 

@@ -26,7 +26,6 @@ class TwistSubscriber(Node):
         self.wheel_dist = 0.185 # m
         self.counts_per_revolution = 480
         self.max_counts_per_second = 900
-        self.max_speed = self.max_counts_per_second / self.counts_per_revolution * 2 * math.pi
         self.wheel_radius = 0.04
         self.speed_mult = self.counts_per_revolution / (self.wheel_radius * 2 * math.pi)
 
@@ -36,8 +35,10 @@ class TwistSubscriber(Node):
         self.ser.write(self.START_FLAG + self.STOP_REQUEST)
 
     def twist_callback(self, msg):
-        linear_x = (msg.linear.x * self.speed_mult * 127) // self.max_speed
-        angular_z = (msg.angular.z * self.speed_mult * 127) // self.max_speed
+        linear_x = int((msg.linear.x * self.speed_mult * 127) / self.max_counts_per_second)
+        angular_z = int((msg.angular.z * self.speed_mult * 127) / self.max_counts_per_second)
+
+        self.get_logger().info(f"linear x: {linear_x}, angular z: {angular_z}")
 
         if linear_x > 127:
             linear_x = 127
@@ -48,12 +49,10 @@ class TwistSubscriber(Node):
         if angular_z > 127:
             angular_z = 127
 
-        if angular_z < 127:
+        if angular_z < -127:
             angular_z = -127
 
-        self.ser.write(self.START_FLAG + self.DRIVE_REQUEST + int(linear_x).to_bytes(1) + int(angular_z).to_bytes(1))
-
-        #self.get_logger().info(f'Received Twist: Linear X={linear_x}, Angular Z={angular_z}')
+        self.ser.write(self.START_FLAG + self.DRIVE_REQUEST + int(linear_x).to_bytes(1, 'big',  signed=True) + int(angular_z).to_bytes(1, 'big', signed=True))
 
     def __del__(self):
         self.stop()

@@ -74,7 +74,7 @@ class OdomPublisher(Node):
         vel_b = speed_b * angular_vel_mult
 
         self.vx = (vel_a + vel_b) / 2
-        self.vth = (vel_b - vel_a) / self.wheel_dist
+        self.vth = (vel_a - vel_b) / self.wheel_dist
 
         # Update position
         self.x += self.vx * math.cos(self.th) * dt
