@@ -6,21 +6,10 @@ from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch_ros.actions import Node
 
 def generate_launch_description():
-    config_dir = os.path.join(
-        get_package_share_directory('movement'), 'configuration_files'
-    )
-
-    cartographer_config_basename = 'cartographer_config.lua'
-
     sllidar_launch_path = os.path.join(
         get_package_share_directory('sllidar_ros2'),
         'launch',
         'sllidar_c1_launch.py'
-    )
-
-    nav2_launch_path = os.path.join(
-        get_package_share_directory('movement'),
-        'custom_nav2.launch.py'
     )
 
     return LaunchDescription([
@@ -40,54 +29,5 @@ def generate_launch_description():
 
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource(sllidar_launch_path),
-        ),
-        
-        Node(
-            package='tf2_ros',
-            executable='static_transform_publisher',
-            name='static_transform_0',
-            output='screen',
-            arguments=['0', '0', '0', '0', '0', '0', 'map', 'odom'],
-        ),
-        
-        Node(
-            package='tf2_ros',
-            executable='static_transform_publisher',
-            name='static_transform_1',
-            output='screen',
-            arguments=['0', '0', '0', '0', '0', '0', 'odom', 'base_link'],
-        ),
-
-        Node(
-            package='tf2_ros',
-            executable='static_transform_publisher',
-            name='static_transform_2',
-            output='screen',
-            arguments=['0', '0', '0', '0', '0', '0', 'base_link', 'laser'],
-        ),
-
-        Node(
-            package='cartographer_ros',
-            executable='cartographer_node',
-            name='cartographer_node',
-            output='screen',
-            arguments=[
-                '-configuration_directory', config_dir,
-                '-configuration_basename', cartographer_config_basename,
-            ],
-        ),
-
-        Node(
-            package='cartographer_ros',
-            executable='cartographer_occupancy_grid_node',
-            name='cartographer_occupancy_grid_node',
-            output='screen',
-            arguments=[
-                '-resolution', '0.05',
-            ],
-        ),
-
-        IncludeLaunchDescription(
-            PythonLaunchDescriptionSource(nav2_launch_path),
         ),
     ])

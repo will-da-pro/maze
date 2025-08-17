@@ -26,7 +26,6 @@ setup(
         'console_scripts': [
             'twist_subscriber = movement.twist_subscriber:main',
             'odom_publisher = movement.odom_publisher:main',
-            'map_subscriber = movement.map_subscriber:main',
         ],
     },
 )

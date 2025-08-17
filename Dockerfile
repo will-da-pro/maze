@@ -4,14 +4,12 @@ SHELL ["/bin/bash", "-c"]
 
 WORKDIR /app
 
-RUN apt-get update && apt-get install -y ros-kilted-demo-nodes-cpp git python3-pip git python3-jinja2 \
+RUN apt-get update && apt-get install -y git python3-pip git python3-jinja2 \
       libboost-dev \
       libgnutls28-dev openssl libtiff-dev pybind11-dev \
       meson cmake \
       python3-yaml python3-ply python3-serial \
       libglib2.0-dev libgstreamer-plugins-base1.0-dev \
-      ros-kilted-cartographer ros-kilted-cartographer-ros \
-      ros-kilted-navigation2 ros-kilted-nav2-bringup
 
 # Clone and build raspberrypi's libcamera fork
 RUN git clone https://github.com/raspberrypi/libcamera.git \
