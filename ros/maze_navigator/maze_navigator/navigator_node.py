@@ -1,11 +1,13 @@
 import math
 import numpy as np
+import cv2
 import rclpy
-import time
 from rclpy.node import Node
 from geometry_msgs.msg import Pose, Point, Quaternion, Twist, Vector3
 from nav_msgs.msg import Odometry
-from sensor_msgs.msg import LaserScan
+from sensor_msgs.msg import LaserScan, Image
+
+from cv_bridge import CvBridge
 
 class LaserPoint:
     def __init__(self, angle: float, value: float):
@@ -20,6 +22,7 @@ class NavigatorNode(Node):
         super().__init__('navigator_node')
         self.scan_subscription = self.create_subscription(LaserScan, 'scan', self.scan_callback, 10)
         self.odom_subscription = self.create_subscription(Odometry, 'odom', self.odom_callback, 10)
+        self.image_subscription = self.create_subscription(Image, 'camera_node/image_raw', self.image_callback, 10)
         self.twist_publisher = self.create_publisher(Twist, 'cmd_vel', 10)
 
         self.fov: float = math.pi / 8 #radians
@@ -45,6 +48,19 @@ class NavigatorNode(Node):
 
         self.turn_count: int = 0
         self.last_angle: float = 0
+
+        self.fourcc = cv2.VideoWriter_fourcc(*"XVID")
+        self.out = cv2.VideoWriter("/app/output.avi", self.fourcc, 30.0, (800, 600))
+
+    def image_callback(self, msg):
+        bridge = CvBridge()
+        cv_image = bridge.imgmsg_to_cv2(msg, desired_encoding='passthrough')
+
+        self.get_logger().info(f"Image received! width: {len(cv_image[0])}, height: {len(cv_image)}")
+
+        self.get_logger().info(f"{cv_image}")
+
+        self.out.write(cv_image)
 
     @staticmethod
     def euler_from_quaternion(x, y, z, w):
@@ -113,11 +129,9 @@ class NavigatorNode(Node):
         new_angle = self.euler_from_quaternion(q.x, q.y, q.z, q.w)[2]
 
         if new_angle < self.last_angle and self.dtheta > 0:
-            self.get_logger().info(f"New Turn: {new_angle}, {self.dtheta}")
             self.turn_count += 1
 
         elif new_angle > self.last_angle and self.dtheta < 0:
-            self.get_logger().info(f"New Turn: {new_angle}, {self.dtheta}")
             self.turn_count -= 1
 
         self.last_angle = new_angle
@@ -125,9 +139,7 @@ class NavigatorNode(Node):
         self.current_angle = self.turn_count * 2 * math.pi + new_angle
 
     def scan_callback(self, msg) -> None:
-        start_time = time.time()
         if self.turning:
-            self.get_logger().info(f"current: {self.current_angle}, target: {self.target_angle}")
             if self.turn_vel > 0 and self.current_angle > self.target_angle:
                 self.stop()
             elif self.turn_vel < 0 and self.current_angle < self.target_angle:
@@ -145,8 +157,6 @@ class NavigatorNode(Node):
         closest_left: LaserPoint | None = None
         closest_right: LaserPoint | None = None
         
-        self.get_logger().info(f"Scan Data: min: {msg.angle_min}, max: {msg.angle_max}, increment: {msg.angle_increment}")
-
         for index, value in enumerate(msg.ranges):
             if value > msg.range_max or value > self.range or value < msg.range_min:
                 continue
@@ -175,11 +185,9 @@ class NavigatorNode(Node):
                     closest_right = new_point
 
         average_front: float | None = self.average_dist(front_points)
-        self.get_logger().info(f"Average front: {average_front}, len: {len(front_points)}, closest: {closest_front}")
 
         if average_front is not None and average_front < self.front_turn_distance:
             self.turn(math.pi / 2)
-            self.get_logger().info("Turning")
             return
 
         error: float = 0
@@ -189,7 +197,6 @@ class NavigatorNode(Node):
             error = -self.max_speed
 
         else:
-            self.get_logger().info(f"Closest left: {closest_left}")
             error = (-1/2 * math.pi - closest_left.angle) * self.turn_mult
             error += (self.target_distance - closest_left.value) * self.dist_mult
 
@@ -198,10 +205,6 @@ class NavigatorNode(Node):
         cmd.angular.z = error
         self.twist_publisher.publish(cmd)
 
-        self.get_logger().info(f"Error: {error}")
-
-        end_time = time.time()
-        self.get_logger().info(f"Time: {end_time - start_time}")
 
 def main(args=None):
     rclpy.init(args=args)

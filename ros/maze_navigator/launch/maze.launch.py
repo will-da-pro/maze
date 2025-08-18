@@ -34,6 +34,13 @@ def generate_launch_description():
             output='screen',
         ),
 
+        Node(
+            package='camera_ros',
+            executable='camera_node',
+            name='camera_node',
+            output='screen',
+        ),
+
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource(sllidar_launch_path),
         ),

@@ -38,8 +38,6 @@ class TwistSubscriber(Node):
         linear_x = int((msg.linear.x * self.speed_mult * 127) / self.max_counts_per_second)
         angular_z = int((msg.angular.z * self.speed_mult * 127) / self.max_counts_per_second)
 
-        self.get_logger().info(f"linear x: {linear_x}, angular z: {angular_z}")
-
         if linear_x > 127:
             linear_x = 127
 
