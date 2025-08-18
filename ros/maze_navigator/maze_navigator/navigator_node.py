@@ -22,10 +22,10 @@ class NavigatorNode(Node):
         self.odom_subscription = self.create_subscription(Odometry, 'odom', self.odom_callback, 10)
         self.twist_publisher = self.create_publisher(Twist, 'cmd_vel', 10)
 
-        self.fov: float = math.pi / 4 #radians
+        self.fov: float = math.pi / 8 #radians
         self.range: float = 10.0 #metres
-        self.target_distance: float = 0.4 # metres
-        self.front_turn_distance: float = 0.3
+        self.target_distance: float = 0.1 # metres
+        self.front_turn_distance: float = 0.2
         self.max_speed: float = 0.25 # ms^-1
         self.default_speed: float = 0.20
 
@@ -34,7 +34,7 @@ class NavigatorNode(Node):
         self.turning: bool = False
         self.turn_vel: float = 0
         self.turn_mult: float = 0.5
-        self.dist_mult: float = 0.2
+        self.dist_mult: float = 1
 
         self.x: float = 0
         self.y: float = 0
