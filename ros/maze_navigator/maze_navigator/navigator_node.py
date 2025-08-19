@@ -13,12 +13,22 @@ from sensor_msgs.msg import LaserScan, Image
 from cv_bridge import CvBridge
 
 class LaserPoint:
-    def __init__(self, angle: float, value: float):
+    def __init__(self, angle: float, value: float) -> None:
         self.angle: float = angle
         self.value: float = value
 
     def __str__(self) -> str:
         return f"Angle: {self.angle}, Value: {self.value}"
+
+
+class Point:
+    def __init__(self, x: float, y: float) -> None:
+        self.x: float = x
+        self.y: float = y
+        
+    def __str__(self) -> str:
+        return f"x: {self.x}, y: {self.y}"
+
 
 class NavigatorNode(Node):
     def __init__(self) -> None:
@@ -68,6 +78,11 @@ class NavigatorNode(Node):
         self.closest_front: LaserPoint | None = None
         self.closest_left: LaserPoint | None = None
         self.closest_right: LaserPoint | None = None
+
+        self.green_squares: list[Point] = []
+        self.red_squares: list[Point] = []
+
+        self.min_square_dist: float = 0.2
         
     def image_callback(self, msg):
         if not self.navigate:
@@ -81,14 +96,16 @@ class NavigatorNode(Node):
         green_mask = cv2.inRange(hsv_image, (36, 25, 25), (70, 255, 255))
         red_mask = cv2.inRange(hsv_image, (0, 100, 100), (10, 255, 255)) | cv2.inRange(hsv_image, (160, 100, 100), (179, 255, 255))
         black_mask = cv2.inRange(hsv_image, (0, 0, 0), (179, 255, 40))
-        silver_mask = cv2.inRange(hsv_image, (0, 0, 150), (179, 30, 255))
+        silver_mask = cv2.inRange(hsv_image, (0, 0, 150), (179, 30, 190))
 
         n_g = cv2.countNonZero(green_mask)
         n_r = cv2.countNonZero(red_mask)
         n_b = cv2.countNonZero(black_mask)
         n_s = cv2.countNonZero(silver_mask)
 
-        if n_b / (msg.width * msg.height) > self.min_black:
+        area: int = msg.width * msg.height
+
+        if n_b / area > self.min_black:
             self.get_logger().info("Black")
             self.straight(self, -0.2)
 
@@ -101,6 +118,56 @@ class NavigatorNode(Node):
                 self.turn(self, math.pi)
 
             return
+
+        valid_green: bool = True
+
+        for point in self.green_squares:
+            if math.sqrt((point.x - self.x) ** 2 + (point.y - self.y) ** 2) < self.min_square_dist:
+                valid_green = False
+                break
+        
+        valid_red: bool = True
+
+        for point in self.red_squares:
+            if math.sqrt((point.x - self.x) ** 2 + (point.y - self.y) ** 2) < self.min_square_dist:
+                valid_red = False
+                break
+            
+        if n_g / area > self.min_green and valid_green:
+            self.get_logger().info("Green")
+            self.navigate = False
+            self.stop()
+
+            self.green_squares.append(Point(self.x, self.y))
+
+            sleep_time = 2
+
+            rate = self.create_rate(1 / sleep_time)
+            rate.sleep()
+
+            self.navigate = True
+        
+        if n_r / area > self.min_red and valid_red:
+            self.get_logger().info("Red")
+            self.navigate = False
+            self.stop()
+
+            self.red_squares.append(Point(self.x, self.y))
+
+            sleep_time = 2
+
+            rate = self.create_rate(1 / sleep_time)
+            rate.sleep()
+
+            self.navigate = True
+
+        green_count = len(self.green_squares)
+        red_count = len(self.red_squares)
+
+        if n_s / area > self.min_silver and green_count + red_count >= 4:
+            self.get_logger().info("Silver")
+            self.navigate = False
+            self.stop()
 
         self.get_logger().info(f"green: {n_g}, red: {n_r}, black: {n_b}, silver: {n_s}")
 
