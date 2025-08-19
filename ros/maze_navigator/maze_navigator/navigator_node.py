@@ -96,7 +96,7 @@ class NavigatorNode(Node):
         green_mask = cv2.inRange(hsv_image, (36, 25, 25), (70, 255, 255))
         red_mask = cv2.inRange(hsv_image, (0, 100, 100), (10, 255, 255)) | cv2.inRange(hsv_image, (160, 100, 100), (179, 255, 255))
         black_mask = cv2.inRange(hsv_image, (0, 0, 0), (179, 255, 40))
-        silver_mask = cv2.inRange(hsv_image, (0, 0, 150), (179, 30, 190))
+        silver_mask = cv2.inRange(hsv_image, (0, 0, 100), (179, 30, 140))
 
         n_g = cv2.countNonZero(green_mask)
         n_r = cv2.countNonZero(red_mask)
