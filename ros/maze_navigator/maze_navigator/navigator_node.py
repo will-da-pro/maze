@@ -1,55 +1,62 @@
 import functools
 import math
-import numpy as np
-import cv2
 import sys
-import rclpy
-from rclpy.node import Node
-from rclpy.executors import MultiThreadedExecutor
-from rclpy.callback_groups import ReentrantCallbackGroup
-from geometry_msgs.msg import Pose, Point, Quaternion, Twist, Vector3
-from nav_msgs.msg import Odometry
-from sensor_msgs.msg import LaserScan, Image
 
+import cv2
 from cv_bridge import CvBridge
+from geometry_msgs.msg import Twist
 from gpiozero import LED
+from nav_msgs.msg import Odometry
+import rclpy
+from rclpy.callback_groups import ReentrantCallbackGroup
+from rclpy.executors import MultiThreadedExecutor
+from rclpy.node import Node
+from sensor_msgs.msg import Image, LaserScan
+
 
 class LaserPoint:
+
     def __init__(self, angle: float, value: float) -> None:
         self.angle: float = angle
         self.value: float = value
 
     def __str__(self) -> str:
-        return f"Angle: {self.angle}, Value: {self.value}"
+        return f'Angle: {self.angle}, Value: {self.value}'
 
 
-class Point:
+class CartesianPoint:
+
     def __init__(self, x: float, y: float) -> None:
         self.x: float = x
         self.y: float = y
-        
+
     def __str__(self) -> str:
-        return f"x: {self.x}, y: {self.y}"
+        return f'x: {self.x}, y: {self.y}'
 
 
 class NavigatorNode(Node):
+
     def __init__(self) -> None:
         super().__init__('navigator_node')
         self.scan_callback_group = ReentrantCallbackGroup()
         self.odom_callback_group = ReentrantCallbackGroup()
         self.image_callback_group = ReentrantCallbackGroup()
 
-        self.scan_subscription = self.create_subscription(LaserScan, 'scan', self.scan_callback, 10, callback_group=self.scan_callback_group)
-        self.odom_subscription = self.create_subscription(Odometry, 'odom', self.odom_callback, 10, callback_group=self.odom_callback_group)
-        self.image_subscription = self.create_subscription(Image, 'camera_node/image_raw', self.image_callback, 10, callback_group = self.image_callback_group)
+        self.scan_sub = self.create_subscription(LaserScan, 'scan', self.scan_callback, 10,
+                                                 callback_group=self.scan_callback_group)
+        self.odom_sub = self.create_subscription(Odometry, 'odom', self.odom_callback, 10,
+                                                 callback_group=self.odom_callback_group)
+        self.image_sub = self.create_subscription(Image, 'camera_node/image_raw',
+                                                  self.image_callback, 10,
+                                                  callback_group=self.image_callback_group)
         self.twist_publisher = self.create_publisher(Twist, 'cmd_vel', 10)
 
-        self.fov: float = math.pi / 8 #radians
-        self.max_range: float = 10.0 #metres
+        self.fov: float = math.pi / 8  # radians
+        self.max_range: float = 10.0  # metres
         self.min_range: float = 0.09
-        self.target_distance: float = 0.1 # metres
+        self.target_distance: float = 0.1  # metres
         self.front_turn_distance: float = 0.2
-        self.max_speed: float = 0.25 # ms^-1
+        self.max_speed: float = 0.25  # ms^-1
         self.default_speed: float = 0.20
 
         self.current_angle: float = 0
@@ -72,7 +79,7 @@ class NavigatorNode(Node):
         self.min_red: float = 0.1
         self.min_black: float = 0.5
         self.min_silver: float = 0.75
-        
+
         self.front_points: list[LaserPoint] = []
         self.left_points: list[LaserPoint] = []
         self.right_points: list[LaserPoint] = []
@@ -81,14 +88,14 @@ class NavigatorNode(Node):
         self.closest_left: LaserPoint | None = None
         self.closest_right: LaserPoint | None = None
 
-        self.green_squares: list[Point] = []
-        self.red_squares: list[Point] = []
+        self.green_squares: list[CartesianPoint] = []
+        self.red_squares: list[CartesianPoint] = []
 
         self.min_square_dist: float = 0.2
 
         self.red_led = LED(10)
         self.green_led = LED(11)
-        
+
     def image_callback(self, msg):
         if not self.navigate:
             return
@@ -97,9 +104,10 @@ class NavigatorNode(Node):
         cv_image = bridge.imgmsg_to_cv2(msg, desired_encoding='rgb8')
 
         hsv_image = cv2.cvtColor(cv_image, cv2.COLOR_RGB2HSV)
-        
+
         green_mask = cv2.inRange(hsv_image, (36, 25, 25), (70, 255, 255))
-        red_mask = cv2.inRange(hsv_image, (0, 100, 100), (10, 255, 255)) | cv2.inRange(hsv_image, (160, 100, 100), (179, 255, 255))
+        red_mask = (cv2.inRange(hsv_image, (0, 100, 100), (10, 255, 255))
+                    | cv2.inRange(hsv_image, (160, 100, 100), (179, 255, 255)))
         black_mask = cv2.inRange(hsv_image, (0, 0, 0), (179, 255, 40))
         silver_mask = cv2.inRange(hsv_image, (0, 0, 100), (179, 30, 140))
 
@@ -111,7 +119,7 @@ class NavigatorNode(Node):
         area: int = msg.width * msg.height
 
         if n_b / area > self.min_black:
-            self.get_logger().info("Black")
+            self.get_logger().info('Black')
             self.straight(self, -0.2)
 
             right_average = self.average_dist(self.right_points)
@@ -127,23 +135,25 @@ class NavigatorNode(Node):
         valid_green: bool = True
 
         for point in self.green_squares:
-            if math.sqrt((point.x - self.x) ** 2 + (point.y - self.y) ** 2) < self.min_square_dist:
+            if (math.sqrt((point.x - self.x) ** 2 + (point.y - self.y) ** 2)
+                    < self.min_square_dist):
                 valid_green = False
                 break
-        
+
         valid_red: bool = True
 
         for point in self.red_squares:
-            if math.sqrt((point.x - self.x) ** 2 + (point.y - self.y) ** 2) < self.min_square_dist:
+            if (math.sqrt((point.x - self.x) ** 2 + (point.y - self.y) ** 2)
+                    < self.min_square_dist):
                 valid_red = False
                 break
-            
+
         if n_g / area > self.min_green and valid_green:
-            self.get_logger().info("Green")
+            self.get_logger().info('Green')
             self.navigate = False
             self.stop()
 
-            self.green_squares.append(Point(self.x, self.y))
+            self.green_squares.append(CartesianPoint(self.x, self.y))
 
             sleep_time = 2
 
@@ -151,13 +161,13 @@ class NavigatorNode(Node):
             rate.sleep()
 
             self.navigate = True
-        
+
         if n_r / area > self.min_red and valid_red:
-            self.get_logger().info("Red")
+            self.get_logger().info('Red')
             self.navigate = False
             self.stop()
 
-            self.red_squares.append(Point(self.x, self.y))
+            self.red_squares.append(CartesianPoint(self.x, self.y))
 
             sleep_time = 2
 
@@ -170,13 +180,13 @@ class NavigatorNode(Node):
         red_count = len(self.red_squares)
 
         if n_s / area > self.min_silver and green_count + red_count >= 4:
-            self.get_logger().info("Silver")
+            self.get_logger().info('Silver')
             self.navigate = False
             self.stop()
 
             self.display_victims()
 
-        self.get_logger().info(f"green: {n_g}, red: {n_r}, black: {n_b}, silver: {n_s}")
+        self.get_logger().info(f'green: {n_g}, red: {n_r}, black: {n_b}, silver: {n_s}')
 
     def display_victims(self):
         sleep_time = 1
@@ -198,8 +208,9 @@ class NavigatorNode(Node):
 
     @staticmethod
     def euler_from_quaternion(x, y, z, w):
-        """
-        Convert a quaternion into Euler angles (roll, pitch, yaw)
+        """Convert quaternion to Euler.
+
+        Convert a quaternion into Euler angles (roll, pitch, yaw).
         @param x: x component of quaternion
         @param y: y component of quaternion
         @param z: z component of quaternion
@@ -234,7 +245,7 @@ class NavigatorNode(Node):
 
             return result
         return wrapper
-    
+
     @staticmethod
     def average_dist(points: list[LaserPoint]) -> float | None:
         if len(points) == 0:
@@ -266,10 +277,10 @@ class NavigatorNode(Node):
         moving: bool = True
 
         while moving:
-            self.get_logger().info(f"dir: {direction}, target: {target_x}, x: {self.x}")
+            self.get_logger().info(f'dir: {direction}, target: {target_x}, x: {self.x}')
             if direction > 0 and self.x > target_x:
                 moving = False
-            
+
             elif direction < 0 and self.x < target_x:
                 moving = False
 
@@ -288,7 +299,7 @@ class NavigatorNode(Node):
         self.twist_publisher.publish(msg)
 
         turning: bool = True
-        
+
         while turning:
             if turn_vel > 0 and self.current_angle > self.target_angle:
                 turning = False
@@ -300,13 +311,13 @@ class NavigatorNode(Node):
                 turning = False
 
     def odom_callback(self, msg) -> None:
-        self.get_logger().info("Odom")
+        self.get_logger().info('Odom')
         self.x = msg.pose.pose.position.x
         self.y = msg.pose.pose.position.y
         self.dx = msg.twist.twist.linear.x
         self.dy = msg.twist.twist.linear.y
         self.dtheta = msg.twist.twist.angular.z
-        
+
         q = msg.pose.pose.orientation
         new_angle = self.euler_from_quaternion(q.x, q.y, q.z, q.w)[2]
 
@@ -331,14 +342,15 @@ class NavigatorNode(Node):
         self.closest_front = None
         self.closest_left = None
         self.closest_right = None
-        
+
         for index, value in enumerate(msg.ranges):
-            if value > msg.range_max or value > self.max_range or value < msg.range_min or value < self.min_range:
+            if (value > msg.range_max or value > self.max_range
+                    or value < msg.range_min or value < self.min_range):
                 continue
 
             angle = msg.angle_min + index * msg.angle_increment
 
-            if angle > math.pi - self.fov / 2  or angle < -math.pi + self.fov / 2:
+            if angle > math.pi - self.fov / 2 or angle < -math.pi + self.fov / 2:
                 new_point: LaserPoint = LaserPoint(angle, value)
                 self.front_points.append(new_point)
 
@@ -361,7 +373,6 @@ class NavigatorNode(Node):
 
         self.drive()
 
-
     def drive(self) -> None:
         if not self.navigate:
             return
@@ -375,7 +386,7 @@ class NavigatorNode(Node):
         error: float = 0
 
         if len(self.left_points) == 0 or self.closest_left is None:
-            self.get_logger().warn("No left points")
+            self.get_logger().warn('No left points')
             error = -self.max_speed
 
         else:
@@ -391,7 +402,7 @@ class NavigatorNode(Node):
 def main(args=None):
     rclpy.init(args=args)
     maze_navigator_node = NavigatorNode()
-    executor = MultiThreadedExecutor() # Or adjust num_threads as needed
+    executor = MultiThreadedExecutor()  # Or adjust num_threads as needed
     executor.add_node(maze_navigator_node)
     try:
         executor.spin()
@@ -402,6 +413,6 @@ def main(args=None):
         maze_navigator_node.destroy_node()
         rclpy.shutdown()
 
+
 if __name__ == '__main__':
     main()
-

@@ -1,5 +1,6 @@
-import os
 from glob import glob
+import os
+
 from setuptools import find_packages, setup
 
 package_name = 'maze_navigator'
@@ -16,7 +17,7 @@ setup(
     ],
     install_requires=['setuptools'],
     zip_safe=True,
-    maintainer='William D\'Olier',
+    maintainer="William D'Olier",
     maintainer_email='william@dolier.net',
     description='Navigator package for robocup maze robot',
     license='GPL',

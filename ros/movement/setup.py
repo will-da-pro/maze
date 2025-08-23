@@ -1,5 +1,3 @@
-import os
-from glob import glob
 from setuptools import find_packages, setup
 
 package_name = 'movement'
@@ -15,7 +13,7 @@ setup(
     ],
     install_requires=['setuptools'],
     zip_safe=True,
-    maintainer='William D\'Olier',
+    maintainer="William D'Olier",
     maintainer_email='william@dolier.net',
     description='Package for interacting with motor controller over serial',
     license='GPL',
