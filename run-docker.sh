@@ -1,3 +1,4 @@
+# Do not use. Use docker-compose instead.
 docker run -it \
 --privileged \
 --net=host \

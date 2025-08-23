@@ -38,15 +38,15 @@ class OdomPublisher(Node):
         msg = self.ser.read(18)
 
         if len(msg) < 18:
-            self.get_logger().warn(f"Wrong Size ({len(msg)})")
+            self.get_logger().warn(f"Incorrect packet size ({len(msg)}). Is the motor controller connected?")
             return
 
         if msg[0:1] != self.START_FLAG:
-            self.get_logger().warn(f"Incorrect Start Flag ({msg[0]})")
+            self.get_logger().warn(f"Incorrect start flag ({msg[0]}).")
             return
 
         if msg[1:2] != self.ENCODER_RESPONSE:
-            self.get_logger().warn(f"Incorrect Response Byte ({msg[1]})")
+            self.get_logger().warn(f"Incorrect response byte ({msg[1]}).")
             return
 
         enc_a = int.from_bytes(msg[2:6], signed=True)
