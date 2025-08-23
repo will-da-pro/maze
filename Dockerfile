@@ -33,6 +33,8 @@ RUN cd /app/src \
   && cd /app \
   && colcon build --symlink-install
 
+RUN apt-get update && apt-get install -y python3-gpiozero
+
 COPY ./ros /app/src
 
 RUN cd /app \

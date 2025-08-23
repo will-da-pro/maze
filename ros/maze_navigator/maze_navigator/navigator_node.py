@@ -2,6 +2,7 @@ import functools
 import math
 import numpy as np
 import cv2
+import sys
 import rclpy
 from rclpy.node import Node
 from rclpy.executors import MultiThreadedExecutor
@@ -11,6 +12,7 @@ from nav_msgs.msg import Odometry
 from sensor_msgs.msg import LaserScan, Image
 
 from cv_bridge import CvBridge
+from gpiozero import LED
 
 class LaserPoint:
     def __init__(self, angle: float, value: float) -> None:
@@ -83,6 +85,9 @@ class NavigatorNode(Node):
         self.red_squares: list[Point] = []
 
         self.min_square_dist: float = 0.2
+
+        self.red_led = LED(10)
+        self.green_led = LED(11)
         
     def image_callback(self, msg):
         if not self.navigate:
@@ -169,7 +174,27 @@ class NavigatorNode(Node):
             self.navigate = False
             self.stop()
 
+            self.display_victims()
+
         self.get_logger().info(f"green: {n_g}, red: {n_r}, black: {n_b}, silver: {n_s}")
+
+    def display_victims(self):
+        sleep_time = 1
+        rate = self.create_rate(1 / sleep_time)
+
+        for _ in self.green_squares:
+            self.green_led.on()
+            rate.sleep()
+            self.green_led.off()
+            rate.sleep()
+
+        for _ in self.red_squares:
+            self.red_led.on()
+            rate.sleep()
+            self.red_led.off()
+            rate.sleep()
+
+        sys.exit()
 
     @staticmethod
     def euler_from_quaternion(x, y, z, w):
