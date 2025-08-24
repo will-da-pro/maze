@@ -52,9 +52,9 @@ class NavigatorNode(Node):
         self.twist_publisher = self.create_publisher(Twist, 'cmd_vel', 10)
 
         self.fov: float = math.pi / 8  # radians
-        self.max_range: float = 10.0  # metres
+        self.max_range: float = 2.0  # metres
         self.min_range: float = 0.09
-        self.target_distance: float = 0.1  # metres
+        self.target_distance: float = 0.14  # metres
         self.front_turn_distance: float = 0.2
         self.max_speed: float = 0.25  # ms^-1
         self.default_speed: float = 0.20
@@ -91,7 +91,7 @@ class NavigatorNode(Node):
         self.green_squares: list[CartesianPoint] = []
         self.red_squares: list[CartesianPoint] = []
 
-        self.min_square_dist: float = 0.2
+        self.min_square_dist: float = 0.15
 
         self.red_led = LED(10)
         self.green_led = LED(11)
