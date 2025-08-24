@@ -149,32 +149,10 @@ class NavigatorNode(Node):
                 break
 
         if n_g / area > self.min_green and valid_green:
-            self.get_logger().info('Green')
-            self.navigate = False
-            self.stop()
-
-            self.green_squares.append(CartesianPoint(self.x, self.y))
-
-            sleep_time = 2
-
-            rate = self.create_rate(1 / sleep_time)
-            rate.sleep()
-
-            self.navigate = True
+            self.new_green()
 
         if n_r / area > self.min_red and valid_red:
-            self.get_logger().info('Red')
-            self.navigate = False
-            self.stop()
-
-            self.red_squares.append(CartesianPoint(self.x, self.y))
-
-            sleep_time = 2
-
-            rate = self.create_rate(1 / sleep_time)
-            rate.sleep()
-
-            self.navigate = True
+            self.new_red()
 
         green_count = len(self.green_squares)
         red_count = len(self.red_squares)
@@ -187,6 +165,34 @@ class NavigatorNode(Node):
             self.display_victims()
 
         self.get_logger().info(f'green: {n_g}, red: {n_r}, black: {n_b}, silver: {n_s}')
+
+    def new_green(self):
+        self.get_logger().info('Green')
+        self.navigate = False
+        self.stop()
+
+        self.green_squares.append(CartesianPoint(self.x, self.y))
+
+        sleep_time = 2
+
+        rate = self.create_rate(1 / sleep_time)
+        rate.sleep()
+
+        self.navigate = True
+
+    def new_red(self):
+        self.get_logger().info('Red')
+        self.navigate = False
+        self.stop()
+
+        self.red_squares.append(CartesianPoint(self.x, self.y))
+
+        sleep_time = 2
+
+        rate = self.create_rate(1 / sleep_time)
+        rate.sleep()
+
+        self.navigate = True
 
     def display_victims(self):
         sleep_time = 1
