@@ -1,1 +1,0 @@
-savedcmd_/home/william/Desktop/maze/devices/lidar/Module.symvers :=  scripts/mod/modpost -M -m -a      -o /home/william/Desktop/maze/devices/lidar/Module.symvers -T /home/william/Desktop/maze/devices/lidar/modules.order -i Module.symvers -e 

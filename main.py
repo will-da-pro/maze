@@ -3,7 +3,6 @@
 import math
 import numpy as np
 import pygame
-import random
 
 from devices.lidar import Lidar, LaserPoint, Point
 from fractions import Fraction
@@ -360,8 +359,8 @@ class SLAM:
         logical_y: int = physical_y + self.min_y
 
         return logical_x, logical_y
- 
 
+      
 class Robot:
     def __init__(self) -> None:
         pass
@@ -369,7 +368,6 @@ class Robot:
 
 lidar: Lidar = Lidar.init_c3()
 lidar.start()
-slam: SLAM = SLAM()
 
 
 pygame.init()
@@ -377,22 +375,12 @@ surface = pygame.display.set_mode((800, 800))
 size: int = 800
 scale: float = 0.2
 
-featureMAP: FeaturesDetection = FeaturesDetection()
-
 running: bool = True
 
 while running:
-    print("\n\nNEW SCAN\n\n")
-    for event in pygame.event.get():
-        if event.type == pygame.QUIT:
-            running = False
-
-    BREAK_POINT_IND: int = 0
-
     graph: np.ndarray = np.zeros((size, size), dtype=np.uint8)
 
     lidar_data: list[LaserPoint] = lidar.pop_buffer()
-
     featureMAP.laser_points_set(lidar_data, Point(0, 0))
 
     ENDPOINTS: list[Point | int] = [0, 0]
