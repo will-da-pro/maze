@@ -162,6 +162,8 @@ class NavigatorNode(Node):
             self.navigate = False
             self.stop()
 
+            self.straight(self, 0.15)
+
             self.display_victims()
 
         self.get_logger().info(f'green: {n_g}, red: {n_r}, black: {n_b}, silver: {n_s}')
