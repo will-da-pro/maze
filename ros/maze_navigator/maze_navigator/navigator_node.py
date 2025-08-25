@@ -76,7 +76,7 @@ class NavigatorNode(Node):
         self.last_angle: float = 0
 
         self.min_green: float = 0.1
-        self.min_red: float = 0.1
+        self.min_red: float = 0.15
         self.min_black: float = 0.5
         self.min_silver: float = 0.75
 
@@ -106,8 +106,8 @@ class NavigatorNode(Node):
         hsv_image = cv2.cvtColor(cv_image, cv2.COLOR_RGB2HSV)
 
         green_mask = cv2.inRange(hsv_image, (36, 25, 25), (70, 255, 255))
-        red_mask = (cv2.inRange(hsv_image, (0, 100, 100), (10, 255, 255))
-                    | cv2.inRange(hsv_image, (160, 100, 100), (179, 255, 255)))
+        red_mask = (cv2.inRange(hsv_image, (0, 210, 100), (10, 255, 255))
+                    | cv2.inRange(hsv_image, (160, 210, 100), (179, 255, 255)))
         black_mask = cv2.inRange(hsv_image, (0, 0, 0), (179, 255, 40))
         silver_mask = cv2.inRange(hsv_image, (0, 0, 100), (179, 30, 140))
 
@@ -178,7 +178,10 @@ class NavigatorNode(Node):
         sleep_time = 2
 
         rate = self.create_rate(1 / sleep_time)
+
+        self.green_led.on()
         rate.sleep()
+        self.green_led.off()
 
         self.navigate = True
 
@@ -192,7 +195,10 @@ class NavigatorNode(Node):
         sleep_time = 2
 
         rate = self.create_rate(1 / sleep_time)
+
+        self.red_led.on()
         rate.sleep()
+        self.red_led.off()
 
         self.navigate = True
 
