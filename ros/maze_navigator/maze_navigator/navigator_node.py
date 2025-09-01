@@ -55,15 +55,15 @@ class NavigatorNode(Node):
         self.max_range: float = 2.0  # metres
         self.min_range: float = 0.09
         self.target_distance: float = 0.14  # metres
-        self.front_turn_distance: float = 0.2
-        self.max_speed: float = 0.25  # ms^-1
-        self.default_speed: float = 0.20
+        self.front_turn_distance: float = 0.16
+        self.max_speed: float = 0.30  # ms^-1
+        self.default_speed: float = 0.30
 
         self.current_angle: float = 0
         self.target_angle: float = 0
         self.navigate: bool = True
-        self.turn_mult: float = 0.5
-        self.dist_mult: float = 1
+        self.turn_mult: float = 1
+        self.dist_mult: float = 3
 
         self.x: float = 0
         self.y: float = 0
@@ -76,9 +76,9 @@ class NavigatorNode(Node):
         self.last_angle: float = 0
 
         self.min_green: float = 0.1
-        self.min_red: float = 0.15
+        self.min_red: float = 0.1
         self.min_black: float = 0.5
-        self.min_silver: float = 0.75
+        self.min_silver: float = 0.1
 
         self.front_points: list[LaserPoint] = []
         self.left_points: list[LaserPoint] = []
@@ -106,10 +106,10 @@ class NavigatorNode(Node):
         hsv_image = cv2.cvtColor(cv_image, cv2.COLOR_RGB2HSV)
 
         green_mask = cv2.inRange(hsv_image, (36, 25, 25), (70, 255, 255))
-        red_mask = (cv2.inRange(hsv_image, (0, 210, 100), (10, 255, 255))
-                    | cv2.inRange(hsv_image, (160, 210, 100), (179, 255, 255)))
-        black_mask = cv2.inRange(hsv_image, (0, 0, 0), (179, 255, 40))
-        silver_mask = cv2.inRange(hsv_image, (0, 0, 100), (179, 30, 140))
+        red_mask = (cv2.inRange(hsv_image, (0, 160, 150), (10, 255, 255))
+                    | cv2.inRange(hsv_image, (160, 160, 150), (179, 255, 255)))
+        black_mask = cv2.inRange(hsv_image, (0, 0, 0), (179, 150, 40))
+        silver_mask = cv2.inRange(hsv_image, (0, 0, 90), (179, 30, 120))
 
         n_g = cv2.countNonZero(green_mask)
         n_r = cv2.countNonZero(red_mask)
@@ -120,15 +120,17 @@ class NavigatorNode(Node):
 
         if n_b / area > self.min_black:
             self.get_logger().info('Black')
-            self.straight(self, -0.2)
+            self.straight(self, -0.15)
 
             right_average = self.average_dist(self.right_points)
 
-            if right_average > self.front_turn_distance:
+            if right_average is not None and right_average > self.front_turn_distance:
                 self.turn(self, math.pi / 2)
 
             else:
                 self.turn(self, math.pi)
+
+            self.straight(self, 0.15)
 
             return
 
@@ -159,10 +161,11 @@ class NavigatorNode(Node):
 
         if n_s / area > self.min_silver and green_count + red_count >= 4:
             self.get_logger().info('Silver')
+
+            self.straight(self, 0.10)
+
             self.navigate = False
             self.stop()
-
-            self.straight(self, 0.15)
 
             self.display_victims()
 
@@ -401,7 +404,7 @@ class NavigatorNode(Node):
 
         if len(self.left_points) == 0 or self.closest_left is None:
             self.get_logger().warn('No left points')
-            error = -self.max_speed
+            error = -self.max_speed/6
 
         else:
             error = (-1/2 * math.pi - self.closest_left.angle) * self.turn_mult
