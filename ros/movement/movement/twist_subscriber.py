@@ -39,21 +39,18 @@ class TwistSubscriber(Node):
         linear_x = int((msg.linear.x * self.speed_mult * 127) / self.max_counts_per_second)
         angular_z = int((msg.angular.z * self.speed_mult * 127) / self.max_counts_per_second)
 
-        if linear_x > 127:
-            linear_x = 127
+        def fitted(a):
+            return min(max(a, -127), 127)
 
-        if linear_x < -127:
-            linear_x = -127
+        linear_x = fitted(linear_x)
+        angular_z = fitted(angular_z)
 
-        if angular_z > 127:
-            angular_z = 127
-
-        if angular_z < -127:
-            angular_z = -127
+        linear_x_byte: bytes = int(linear_x).to_bytes(1, 'big',  signed=True) 
+        angular_z_byte: bytes = int(angular_z).to_bytes(1, 'big',  signed=True) 
 
         self.ser.write(self.START_FLAG + self.DRIVE_REQUEST
-                       + int(linear_x).to_bytes(1, 'big',  signed=True)
-                       + int(angular_z).to_bytes(1, 'big', signed=True))
+                       + linear_x_byte
+                       + angular_z_byte)
 
     def __del__(self):
         self.stop()

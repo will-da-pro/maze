@@ -51,7 +51,7 @@ class NavigatorNode(Node):
                                                   callback_group=self.image_callback_group)
         self.twist_publisher = self.create_publisher(Twist, 'cmd_vel', 10)
 
-        self.fov: float = math.pi / 8  # radians
+        self.fov: float = math.pi / 4  # radians
         self.max_range: float = 2.0  # metres
         self.min_range: float = 0.09
         self.target_distance: float = 0.14  # metres
