@@ -37,7 +37,8 @@ RUN apt-get update && apt-get install -y python3-gpiozero
 
 COPY ./ros /app/src
 
-RUN cd /app \
+RUN source /opt/ros/$ROS_DISTRO/setup.bash \
+  && cd /app \
   && colcon build --symlink-install
 
 COPY docker_entrypoint.sh /app/
