@@ -1,3 +1,3 @@
-float64 left_distance
-float64 left_angle
-float64 front_distance
+float64 closest_distance
+float64 closest_angle
+float64 average_distance

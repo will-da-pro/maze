@@ -6,4 +6,4 @@ docker run -it \
 --group-add video \
 -e HOME=/tpm \
 maze/ros \
-ros2 launch maze_navigator maze.launch.py
+bash

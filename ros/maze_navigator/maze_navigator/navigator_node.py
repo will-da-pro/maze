@@ -38,12 +38,9 @@ class NavigatorNode(Node):
 
     def __init__(self) -> None:
         super().__init__('navigator_node')
-        self.scan_callback_group = ReentrantCallbackGroup()
         self.odom_callback_group = ReentrantCallbackGroup()
         self.image_callback_group = ReentrantCallbackGroup()
 
-        self.scan_sub = self.create_subscription(LaserScan, 'scan', self.scan_callback, 10,
-                                                 callback_group=self.scan_callback_group)
         self.odom_sub = self.create_subscription(Odometry, 'odom', self.odom_callback, 10,
                                                  callback_group=self.odom_callback_group)
         self.image_sub = self.create_subscription(Image, 'camera_node/image_raw',
@@ -51,9 +48,6 @@ class NavigatorNode(Node):
                                                   callback_group=self.image_callback_group)
         self.twist_publisher = self.create_publisher(Twist, 'cmd_vel', 10)
 
-        self.fov: float = math.pi / 4  # radians
-        self.max_range: float = 2.0  # metres
-        self.min_range: float = 0.09
         self.target_distance: float = 0.14  # metres
         self.front_turn_distance: float = 0.16
         self.max_speed: float = 0.30  # ms^-1
@@ -79,14 +73,6 @@ class NavigatorNode(Node):
         self.min_red: float = 0.1
         self.min_black: float = 0.5
         self.min_silver: float = 0.1
-
-        self.front_points: list[LaserPoint] = []
-        self.left_points: list[LaserPoint] = []
-        self.right_points: list[LaserPoint] = []
-
-        self.closest_front: LaserPoint | None = None
-        self.closest_left: LaserPoint | None = None
-        self.closest_right: LaserPoint | None = None
 
         self.green_squares: list[CartesianPoint] = []
         self.red_squares: list[CartesianPoint] = []
@@ -262,17 +248,6 @@ class NavigatorNode(Node):
 
             return result
         return wrapper
-
-    @staticmethod
-    def average_dist(points: list[LaserPoint]) -> float | None:
-        if len(points) == 0:
-            return None
-
-        total: float = 0
-        for point in points:
-            total += point.value
-
-        return total / len(points)
 
     def stop(self) -> None:
         msg = Twist()
