@@ -7,12 +7,22 @@ from cv_bridge import CvBridge
 from geometry_msgs.msg import Twist
 from gpiozero import LED
 from nav_msgs.msg import Odometry
+from std_msgs.msg import Float64, Bool
 import rclpy
 from rclpy.callback_groups import ReentrantCallbackGroup
 from rclpy.executors import MultiThreadedExecutor
 from rclpy.node import Node
 from sensor_msgs.msg import Image, LaserScan
+from maze_msgs.msg import Wall, Victims
+from enum import Enum
 
+class State(Enum):
+    NAVIGATING = 0
+    TURNING_FROM_WALL = 1
+    IDENTIFYING_VICTIM = 2
+    REVERSING_FROM_HOLE = 3
+    TURNING_FROM_HOLE = 4
+    DISPLAYING_VICTIMS = 5
 
 class LaserPoint:
 
@@ -38,14 +48,17 @@ class NavigatorNode(Node):
 
     def __init__(self) -> None:
         super().__init__('navigator_node')
-        self.odom_callback_group = ReentrantCallbackGroup()
-        self.image_callback_group = ReentrantCallbackGroup()
 
-        self.odom_sub = self.create_subscription(Odometry, 'odom', self.odom_callback, 10,
-                                                 callback_group=self.odom_callback_group)
-        self.image_sub = self.create_subscription(Image, 'camera_node/image_raw',
-                                                  self.image_callback, 10,
-                                                  callback_group=self.image_callback_group)
+        self.odom_sub = self.create_subscription(Odometry, 'odom', self.odom_callback, 10)
+
+        self.left_wall_sub = self.create_subscription(Wall, 'left_wall', self.left_wall_callback, 10)
+        self.front_wall_sub = self.create_subscription(Wall, 'front_wall', self.front_wall_callback, 10)
+        self.right_wall_sub = self.create_subscription(Wall, 'right_wall', self.right_wall_callback, 10)
+
+        self.victims_sub = self.create_subscription(Victims, 'victims', self.victims_callback, 10)
+        self.hole_sub = self.create_subscription(Bool, 'hole_visible', self.hole_callback, 10)
+        self.exit_sub = self.create_subscription(Bool, 'exit_visible', self.exit_callback, 10)
+
         self.twist_publisher = self.create_publisher(Twist, 'cmd_vel', 10)
 
         self.target_distance: float = 0.14  # metres
@@ -55,7 +68,6 @@ class NavigatorNode(Node):
 
         self.current_angle: float = 0
         self.target_angle: float = 0
-        self.navigate: bool = True
         self.turn_mult: float = 1
         self.dist_mult: float = 3
 
@@ -69,13 +81,8 @@ class NavigatorNode(Node):
         self.turn_count: int = 0
         self.last_angle: float = 0
 
-        self.min_green: float = 0.1
-        self.min_red: float = 0.1
-        self.min_black: float = 0.5
-        self.min_silver: float = 0.1
-
-        self.green_squares: list[CartesianPoint] = []
-        self.red_squares: list[CartesianPoint] = []
+        self.green_victims: list[CartesianPoint] = []
+        self.red_victims: list[CartesianPoint] = []
 
         self.min_square_dist: float = 0.15
 
@@ -83,27 +90,7 @@ class NavigatorNode(Node):
         self.green_led = LED(11)
 
     def image_callback(self, msg):
-        if not self.navigate:
-            return
-
-        bridge = CvBridge()
-        cv_image = bridge.imgmsg_to_cv2(msg, desired_encoding='rgb8')
-
-        hsv_image = cv2.cvtColor(cv_image, cv2.COLOR_RGB2HSV)
-
-        green_mask = cv2.inRange(hsv_image, (36, 25, 25), (70, 255, 255))
-        red_mask = (cv2.inRange(hsv_image, (0, 160, 150), (10, 255, 255))
-                    | cv2.inRange(hsv_image, (160, 160, 150), (179, 255, 255)))
-        black_mask = cv2.inRange(hsv_image, (0, 0, 0), (179, 150, 40))
-        silver_mask = cv2.inRange(hsv_image, (0, 0, 90), (179, 30, 120))
-
-        n_g = cv2.countNonZero(green_mask)
-        n_r = cv2.countNonZero(red_mask)
-        n_b = cv2.countNonZero(black_mask)
-        n_s = cv2.countNonZero(silver_mask)
-
-        area: int = msg.width * msg.height
-
+        
         if n_b / area > self.min_black:
             self.get_logger().info('Black')
             self.straight(self, -0.15)
@@ -122,7 +109,7 @@ class NavigatorNode(Node):
 
         valid_green: bool = True
 
-        for point in self.green_squares:
+        for point in self.green_victims:
             if (math.sqrt((point.x - self.x) ** 2 + (point.y - self.y) ** 2)
                     < self.min_square_dist):
                 valid_green = False
@@ -130,7 +117,7 @@ class NavigatorNode(Node):
 
         valid_red: bool = True
 
-        for point in self.red_squares:
+        for point in self.red_victims:
             if (math.sqrt((point.x - self.x) ** 2 + (point.y - self.y) ** 2)
                     < self.min_square_dist):
                 valid_red = False
@@ -142,8 +129,8 @@ class NavigatorNode(Node):
         if n_r / area > self.min_red and valid_red:
             self.new_red()
 
-        green_count = len(self.green_squares)
-        red_count = len(self.red_squares)
+        green_count = len(self.green_victims)
+        red_count = len(self.red_victims)
 
         if n_s / area > self.min_silver and green_count + red_count >= 4:
             self.get_logger().info('Silver')
@@ -162,7 +149,7 @@ class NavigatorNode(Node):
         self.navigate = False
         self.stop()
 
-        self.green_squares.append(CartesianPoint(self.x, self.y))
+        self.green_victims.append(CartesianPoint(self.x, self.y))
 
         sleep_time = 2
 
@@ -179,7 +166,7 @@ class NavigatorNode(Node):
         self.navigate = False
         self.stop()
 
-        self.red_squares.append(CartesianPoint(self.x, self.y))
+        self.red_victims.append(CartesianPoint(self.x, self.y))
 
         sleep_time = 2
 
@@ -195,13 +182,13 @@ class NavigatorNode(Node):
         sleep_time = 1
         rate = self.create_rate(1 / sleep_time)
 
-        for _ in self.green_squares:
+        for _ in self.green_victims:
             self.green_led.on()
             rate.sleep()
             self.green_led.off()
             rate.sleep()
 
-        for _ in self.red_squares:
+        for _ in self.red_victims:
             self.red_led.on()
             rate.sleep()
             self.red_led.off()
