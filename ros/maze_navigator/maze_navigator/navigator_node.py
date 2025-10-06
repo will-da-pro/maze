@@ -278,8 +278,6 @@ class NavigatorNode(Node):
                 return
 
             if self.red_victim:
-                self.stop()
-
                 valid_red: bool = True
 
                 for point in self.red_victims:
@@ -289,6 +287,7 @@ class NavigatorNode(Node):
                         break
 
                 if valid_red:
+                    self.stop()
                     self.red_victims.append(CartesianPoint(self.x, self.y))
 
                     # self.change_node_state(self.camera_subscriber_client,
@@ -305,8 +304,6 @@ class NavigatorNode(Node):
                     return
 
             if self.green_victim:
-                self.stop()
-
                 valid_green: bool = True
 
                 for point in self.green_victims:
@@ -316,6 +313,7 @@ class NavigatorNode(Node):
                         break
 
                 if valid_green:
+                    self.stop()
                     self.green_victims.append(CartesianPoint(self.x, self.y))
 
                     # self.change_node_state(self.camera_subscriber_client,
