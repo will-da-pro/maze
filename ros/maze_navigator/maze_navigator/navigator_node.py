@@ -81,6 +81,7 @@ class NavigatorNode(Node):
         self.front_turn_distance: float = 0.16
         self.max_speed: float = 0.30  # ms^-1
         self.default_speed: float = 0.30
+        self.min_victims: int = 3
 
         self.error: float = 0
 
@@ -268,9 +269,6 @@ class NavigatorNode(Node):
                     and self.front_avg <= self.front_turn_distance):
                 self.stop()
 
-                # self.change_node_state(self.camera_subscriber_client,
-                # Transition.TRANSITION_DEACTIVATE)
-
                 self.straight(reverse=True)
 
                 self.current_state = State.REVERSING_FROM_WALL
@@ -289,11 +287,6 @@ class NavigatorNode(Node):
                 if valid_red:
                     self.stop()
                     self.red_victims.append(CartesianPoint(self.x, self.y))
-
-                    # self.change_node_state(self.camera_subscriber_client,
-                    # Transition.TRANSITION_DEACTIVATE)
-                    # self.change_node_state(self.wall_sensor_client,
-                    # Transition.TRANSITION_DEACTIVATE)
 
                     self.red_led.on()
 
@@ -316,11 +309,6 @@ class NavigatorNode(Node):
                     self.stop()
                     self.green_victims.append(CartesianPoint(self.x, self.y))
 
-                    # self.change_node_state(self.camera_subscriber_client,
-                    # Transition.TRANSITION_DEACTIVATE)
-                    # self.change_node_state(self.wall_sensor_client,
-                    # Transition.TRANSITION_DEACTIVATE)
-
                     self.green_led.on()
 
                     self.wait_start_time = time.time()
@@ -340,8 +328,12 @@ class NavigatorNode(Node):
 
             if self.exit:
                 self.stop()
-                self.current_state = State.DISPLAYING_VICTIMS
-                return
+
+                total_victims = len(self.red_victims) + len(self.green_victims)
+
+                if total_victims >= self.min_victims:
+                    self.current_state = State.DISPLAYING_VICTIMS
+                    return
 
             msg = Twist()
             msg.linear.x = float(self.default_speed)
