@@ -81,6 +81,7 @@ class NavigatorNode(Node):
         self.front_turn_distance: float = 0.16
         self.max_speed: float = 0.30  # ms^-1
         self.default_speed: float = 0.30
+        self.min_victims: int = 3
 
         self.error: float = 0
 
@@ -327,8 +328,12 @@ class NavigatorNode(Node):
 
             if self.exit:
                 self.stop()
-                self.current_state = State.DISPLAYING_VICTIMS
-                return
+
+                total_victims = len(self.red_victims) + len(self.green_victims)
+
+                if total_victims >= self.min_victims:
+                    self.current_state = State.DISPLAYING_VICTIMS
+                    return
 
             msg = Twist()
             msg.linear.x = float(self.default_speed)
