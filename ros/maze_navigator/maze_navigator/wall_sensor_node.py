@@ -41,6 +41,11 @@ class WallSensorNode(LifecycleNode):
         self.max_range: float = 2.0  # metres
         self.min_range: float = 0.09
 
+        self.target_distance: float = 0.14  # metres
+
+        self.turn_mult: float = 1
+        self.dist_mult: float = 3
+
     def on_configure(self, state: State) -> TransitionCallbackReturn:
         self.left_publisher = self.create_publisher(Wall, 'left_wall', 10)
         self.front_publisher = self.create_publisher(Wall, 'front_wall', 10)
@@ -140,6 +145,13 @@ class WallSensorNode(LifecycleNode):
             right_msg.closest_angle = closest_right.angle
             right_msg.average_distance = self.average_dist(right_points)
             self.right_publisher.publish(right_msg)
+
+        error = (-1/2 * math.pi - closest_left.angle) * self.turn_mult
+        error += (self.target_distance - closest_left.value) * self.dist_mult
+
+        error_msg = Float64()
+        error_msg.data = error
+        self.error_publisher.publish(error_msg)
 
 
 def main(args=None):

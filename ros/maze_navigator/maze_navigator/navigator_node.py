@@ -8,21 +8,25 @@ from geometry_msgs.msg import Twist
 from gpiozero import LED
 from nav_msgs.msg import Odometry
 from std_msgs.msg import Float64, Bool
+from lifecycle_msgs.srv import ChangeState
+from lifecycle_msgs.msg import Transition
 import rclpy
 from rclpy.callback_groups import ReentrantCallbackGroup
 from rclpy.executors import MultiThreadedExecutor
-from rclpy.node import Node
+from rclpy.node import LifecycleNode
 from sensor_msgs.msg import Image, LaserScan
 from maze_msgs.msg import Wall, Victims
 from enum import Enum
 
 class State(Enum):
-    NAVIGATING = 0
-    TURNING_FROM_WALL = 1
-    IDENTIFYING_VICTIM = 2
-    REVERSING_FROM_HOLE = 3
-    TURNING_FROM_HOLE = 4
-    DISPLAYING_VICTIMS = 5
+    INIT = 0
+    NAVIGATING = 1
+    TURNING_FROM_WALL = 2
+    IDENTIFYING_VICTIM = 3
+    REVERSING_FROM_HOLE = 4
+    TURNING_FROM_HOLE = 5
+    DISPLAYING_VICTIMS = 6
+    STOP = 7
 
 class LaserPoint:
 
@@ -51,25 +55,28 @@ class NavigatorNode(Node):
 
         self.odom_sub = self.create_subscription(Odometry, 'odom', self.odom_callback, 10)
 
-        self.left_wall_sub = self.create_subscription(Wall, 'left_wall', self.left_wall_callback, 10)
         self.front_wall_sub = self.create_subscription(Wall, 'front_wall', self.front_wall_callback, 10)
-        self.right_wall_sub = self.create_subscription(Wall, 'right_wall', self.right_wall_callback, 10)
+        self.error_sub = self.create_subscription(Float64, 'maze_error', self.error_callback, 10)
 
         self.victims_sub = self.create_subscription(Victims, 'victims', self.victims_callback, 10)
         self.hole_sub = self.create_subscription(Bool, 'hole_visible', self.hole_callback, 10)
         self.exit_sub = self.create_subscription(Bool, 'exit_visible', self.exit_callback, 10)
 
-        self.twist_publisher = self.create_publisher(Twist, 'cmd_vel', 10)
+        self.wall_sensor_client = self.create_client(ChangeState, '/wall_sensor_node/change_state')
+        self.camera_subscriber_client = self.create_client(ChangeState, '/camera_subscriber_node/change_state')
 
-        self.target_distance: float = 0.14  # metres
+        self.twist_publisher = self.create_publisher(Twist, 'cmd_vel', 10)
+        
+        self.current_state = State.INIT
+
         self.front_turn_distance: float = 0.16
         self.max_speed: float = 0.30  # ms^-1
         self.default_speed: float = 0.30
 
+        self.error: float = 0
+
         self.current_angle: float = 0
         self.target_angle: float = 0
-        self.turn_mult: float = 1
-        self.dist_mult: float = 3
 
         self.x: float = 0
         self.y: float = 0
@@ -77,6 +84,15 @@ class NavigatorNode(Node):
         self.dx: float = 0
         self.dy: float = 0
         self.dtheta: float = 0
+
+        self.front_avg: float = 0
+        self.error: float = 0
+
+        self.green_victim: bool = False
+        self.red_victim: bool = False
+
+        self.hole: bool = False
+        self.exit: bool = False
 
         self.turn_count: int = 0
         self.last_angle: float = 0
@@ -88,6 +104,12 @@ class NavigatorNode(Node):
 
         self.red_led = LED(10)
         self.green_led = LED(11)
+
+    def change_node_state(self, client, transition_id):
+        req = ChangeState.Request()
+        req.transition.id = transition_id
+        future = client.call_async(req)
+        rclpy.spin_until_future_complete(self, future)
 
     def image_callback(self, msg):
         
@@ -310,74 +332,76 @@ class NavigatorNode(Node):
 
         self.current_angle = self.turn_count * 2 * math.pi + new_angle
 
-    def scan_callback(self, msg) -> None:
-        if not self.navigate:
-            return
+    def front_wall_callback(self, msg) -> None:
+        self.front_avg = msg.average_distance
 
-        self.front_points = []
-        self.left_points = []
-        self.right_points = []
+    def error_callback(self, msg) -> None:
+        self.error = msg.data
+        
+    def victims_callback(self, msg) -> None:
+        self.red_victim = msg.red_victim
+        self.green_victim = msg.green_victim
 
-        self.closest_front = None
-        self.closest_left = None
-        self.closest_right = None
+    def hole_callback(self, msg) -> None:
+        self.hole = msg.data
 
-        for index, value in enumerate(msg.ranges):
-            if (value > msg.range_max or value > self.max_range
-                    or value < msg.range_min or value < self.min_range):
-                continue
+    def exit_callback(self, msg) -> None:
+        self.exit = msg.data
 
-            angle = msg.angle_min + index * msg.angle_increment
+    def state_loop(self) -> None:
+        if self.current_state == State.INIT:
+            self.change_node_state(self.wall_sensor_client, Transition.TRANSITION_ACTIVATE)
+            self.change_node_state(self.camera_subscriber_client, Transition.TRANSITION_ACTIVATE) 
+            self.current_state = State.NAVIGATING
 
-            if angle > math.pi - self.fov / 2 or angle < -math.pi + self.fov / 2:
-                new_point: LaserPoint = LaserPoint(angle, value)
-                self.front_points.append(new_point)
+        elif self.current_state == State.NAVIGATING:
+            if self.front_avg <= self.front_turn_distance:
+                pass
+                self.current_state = State.TURNING_FROM_WALL
 
-                if self.closest_front is None or self.closest_front.value > new_point.value:
-                    self.closest_front = new_point
+            if self.red_victim:
+                pass
+                self.current_state = State.IDENTIFYING_VICTIM
 
-            if angle > -1/2 * math.pi - self.fov / 2 and angle < -1/2 * math.pi + self.fov:
-                new_point: LaserPoint = LaserPoint(angle, value)
-                self.left_points.append(new_point)
+            if self.green_victim:
+                pass
+                self.current_state = State.IDENTIFYING_VICTIM
 
-                if self.closest_left is None or self.closest_left.value > new_point.value:
-                    self.closest_left = new_point
+            if self.hole_visible:
+                pass
+                self.current_state = State.REVERSING_FROM_HOLE
 
-            if angle > 1/2 * math.pi - self.fov / 2 and angle < 1/2 * math.pi + self.fov:
-                new_point: LaserPoint = LaserPoint(angle, value)
-                self.right_points.append(new_point)
+            if self.exit:
+                pass
+                self.current_state = State.DISPLAYING_VICTIMS
 
-                if self.closest_right is None or self.closest_right.value > new_point.value:
-                    self.closest_right = new_point
+            msg = Twist()
+            msg.linear.x = self.default_speed
+            msg.angular.z = self.error
+            self.twist_publisher.publish(msg)
 
-        self.drive()
+        elif self.current_state == State.TURNING_FROM_WALL:
+            pass
+            self.current_state = State.NAVIGATING
 
-    def drive(self) -> None:
-        if not self.navigate:
-            return
+        elif self.current_state == State.IDENTIFYING_VICTIM:
+            pass
+            self.current_state = State.NAVIGATING
 
-        average_front: float | None = self.average_dist(self.front_points)
+        elif self.current_state == State.REVERSING_FROM_HOLE:
+            pass
+            self.current_state = State.TURNING_FROM_HOLE
 
-        if average_front is not None and average_front < self.front_turn_distance:
-            self.turn(self, math.pi / 2)
-            return
+        elif self.current_state == State.TURNING_FROM_HOLE:
+            pass
+            self.current_state = State.NAVIGATING
 
-        error: float = 0
+        elif self.current_state == State.DISPLAYING_VICTIMS:
+            self.current_state = State.STOP
 
-        if len(self.left_points) == 0 or self.closest_left is None:
-            self.get_logger().warn('No left points')
-            error = -self.max_speed/6
-
-        else:
-            error = (-1/2 * math.pi - self.closest_left.angle) * self.turn_mult
-            error += (self.target_distance - self.closest_left.value) * self.dist_mult
-
-        cmd = Twist()
-        cmd.linear.x = self.default_speed
-        cmd.angular.z = error
-        self.twist_publisher.publish(cmd)
-
-
+        elif self.current_state == State.STOP:
+            pass
+        
 def main(args=None):
     rclpy.init(args=args)
     maze_navigator_node = NavigatorNode()
