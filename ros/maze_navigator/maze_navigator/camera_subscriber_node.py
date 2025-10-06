@@ -1,12 +1,10 @@
-import math
-import rclpy
-from rclpy.lifecycle import LifecycleNode
-from rclpy.lifecycle import State, TransitionCallbackReturn
-from std_msgs.msg import Float64, Bool
-from sensor_msgs.msg import Image
-from maze_msgs.msg import Victims
 import cv2
 from cv_bridge import CvBridge
+from maze_msgs.msg import Victims
+import rclpy
+from rclpy.lifecycle import LifecycleNode, State, TransitionCallbackReturn
+from sensor_msgs.msg import Image
+from std_msgs.msg import Bool
 
 
 class CameraSubscriberNode(LifecycleNode):
@@ -44,7 +42,7 @@ class CameraSubscriberNode(LifecycleNode):
     def on_activate(self, state: State) -> TransitionCallbackReturn:
         self.get_logger().info('Activating CameraSubscriberNode')
 
-        self.subscriber_ = self.create_subscription(Image, 'camera/image_raw', 
+        self.subscriber_ = self.create_subscription(Image, 'camera/image_raw',
                                                     self.image_callback, 10)
 
         return TransitionCallbackReturn.SUCCESS
@@ -106,5 +104,3 @@ def main(args=None):
     node = CameraSubscriberNode()
     rclpy.spin(node)
     rclpy.shutdown()
-
-

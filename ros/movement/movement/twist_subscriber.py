@@ -45,8 +45,8 @@ class TwistSubscriber(Node):
         linear_x = fitted(linear_x)
         angular_z = fitted(angular_z)
 
-        linear_x_byte: bytes = int(linear_x).to_bytes(1, 'big',  signed=True) 
-        angular_z_byte: bytes = int(angular_z).to_bytes(1, 'big',  signed=True) 
+        linear_x_byte: bytes = int(linear_x).to_bytes(1, 'big',  signed=True)
+        angular_z_byte: bytes = int(angular_z).to_bytes(1, 'big',  signed=True)
 
         self.ser.write(self.START_FLAG + self.DRIVE_REQUEST
                        + linear_x_byte

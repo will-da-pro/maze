@@ -1,10 +1,10 @@
 import math
-import rclpy
-from rclpy.lifecycle import LifecycleNode
-from rclpy.lifecycle import State, TransitionCallbackReturn
-from std_msgs.msg import Float64
-from sensor_msgs.msg import LaserScan
+
 from maze_msgs.msg import Wall
+import rclpy
+from rclpy.lifecycle import LifecycleNode, State, TransitionCallbackReturn
+from sensor_msgs.msg import LaserScan
+from std_msgs.msg import Float64
 
 
 class LaserPoint:
@@ -59,7 +59,7 @@ class WallSensorNode(LifecycleNode):
     def on_activate(self, state: State) -> TransitionCallbackReturn:
         self.get_logger().info('Activating WallSensorNode')
 
-        self.subscriber_ = self.create_subscription(LaserScan, 'scan', 
+        self.subscriber_ = self.create_subscription(LaserScan, 'scan',
                                                     self.scan_callback, 10)
 
         return TransitionCallbackReturn.SUCCESS
@@ -126,7 +126,7 @@ class WallSensorNode(LifecycleNode):
 
                 if closest_right is None or closest_right.value > new_point.value:
                     closest_right = new_point
-       
+
         if closest_left is not None:
             left_msg = Wall()
             left_msg.closest_distance = closest_left.value
@@ -155,11 +155,9 @@ class WallSensorNode(LifecycleNode):
             right_msg.average_distance = self.average_dist(right_points)
             self.right_publisher.publish(right_msg)
 
-        
+
 def main(args=None):
     rclpy.init(args=args)
     node = WallSensorNode()
     rclpy.spin(node)
     rclpy.shutdown()
-
-

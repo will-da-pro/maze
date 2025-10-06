@@ -1,23 +1,18 @@
-import functools
+from enum import Enum
 import math
 import sys
+import time
 
-import cv2
-from cv_bridge import CvBridge
 from geometry_msgs.msg import Twist
 from gpiozero import LED
-from nav_msgs.msg import Odometry
-from std_msgs.msg import Float64, Bool
-from lifecycle_msgs.srv import ChangeState
 from lifecycle_msgs.msg import Transition
+from lifecycle_msgs.srv import ChangeState
+from maze_msgs.msg import Victims, Wall
+from nav_msgs.msg import Odometry
 import rclpy
-from rclpy.callback_groups import ReentrantCallbackGroup
-from rclpy.executors import MultiThreadedExecutor
 from rclpy.node import Node
-from sensor_msgs.msg import Image, LaserScan
-from maze_msgs.msg import Wall, Victims
-from enum import Enum
-import time
+from std_msgs.msg import Bool, Float64
+
 
 class State(Enum):
     INIT = 0
@@ -29,6 +24,7 @@ class State(Enum):
     TURNING_FROM_HOLE = 6
     DISPLAYING_VICTIMS = 7
     STOP = 8
+
 
 class LaserPoint:
 
@@ -57,7 +53,8 @@ class NavigatorNode(Node):
 
         self.odom_sub = self.create_subscription(Odometry, 'odom', self.odom_callback, 10)
 
-        self.front_wall_sub = self.create_subscription(Wall, 'front_wall', self.front_wall_callback, 10)
+        self.front_wall_sub = self.create_subscription(Wall, 'front_wall',
+                                                       self.front_wall_callback, 10)
         self.error_sub = self.create_subscription(Float64, 'maze_error', self.error_callback, 10)
 
         self.victims_sub = self.create_subscription(Victims, 'victims', self.victims_callback, 10)
@@ -65,19 +62,20 @@ class NavigatorNode(Node):
         self.exit_sub = self.create_subscription(Bool, 'exit_visible', self.exit_callback, 10)
 
         self.wall_sensor_client = self.create_client(ChangeState, '/wall_sensor_node/change_state')
-    
-        while not self.wall_sensor_client.wait_for_service(timeout_sec=5.0):
-            self.get_logger().info("Wall sensor service not available, reconnecting...")
 
-        self.camera_subscriber_client = self.create_client(ChangeState, '/camera_subscriber_node/change_state')
+        while not self.wall_sensor_client.wait_for_service(timeout_sec=5.0):
+            self.get_logger().info('Wall sensor service not available, reconnecting...')
+
+        self.camera_subscriber_client = self.create_client(ChangeState,
+                                                           '/camera_subscriber_node/change_state')
 
         while not self.camera_subscriber_client.wait_for_service(timeout_sec=5.0):
-            self.get_logger().info("Camera subscriber service not available, reconnecting...")
+            self.get_logger().info('Camera subscriber service not available, reconnecting...')
 
         self.twist_publisher = self.create_publisher(Twist, 'cmd_vel', 10)
 
         self.timer = self.create_timer(0.05, self.state_loop)
-        
+
         self.current_state = State.INIT
 
         self.front_turn_distance: float = 0.16
@@ -122,7 +120,7 @@ class NavigatorNode(Node):
     def change_node_state(self, client, transition_id):
         req = ChangeState.Request()
         req.transition.id = transition_id
-        future = client.call_async(req)
+        client.call_async(req)
 
     def display_victims(self):
         sleep_time = 1
@@ -179,10 +177,11 @@ class NavigatorNode(Node):
         msg.linear.x = self.default_speed if not reverse else -self.default_speed
         msg.angular.z = 0.0
         self.twist_publisher.publish(msg)
-    
+
     def check_straight_complete(self, dist: float) -> None:
-        displacement = math.sqrt((self.x - self.straight_start_pos[0]) ** 2 + (self.y - self.straight_start_pos[1]) ** 2)
-        
+        displacement = math.sqrt((self.x - self.straight_start_pos[0]) ** 2 +
+                                 (self.y - self.straight_start_pos[1]) ** 2)
+
         if displacement > dist:
             return True
 
@@ -232,7 +231,7 @@ class NavigatorNode(Node):
 
     def error_callback(self, msg) -> None:
         self.error = msg.data
-        
+
     def victims_callback(self, msg) -> None:
         self.red_victim = msg.red_victim
         self.green_victim = msg.green_victim
@@ -246,25 +245,31 @@ class NavigatorNode(Node):
     def state_loop(self) -> None:
         self.get_logger().info(f'front average: {self.front_avg}')
         if self.current_state == State.INIT:
-            self.get_logger().info("Configuring Wall Sensor")
-            self.change_node_state(self.wall_sensor_client, Transition.TRANSITION_CONFIGURE)
+            self.get_logger().info('Configuring Wall Sensor')
+            self.change_node_state(self.wall_sensor_client,
+                                   Transition.TRANSITION_CONFIGURE)
 
-            self.get_logger().info("Configuring Camera Subscriber")
-            self.change_node_state(self.camera_subscriber_client, Transition.TRANSITION_CONFIGURE) 
+            self.get_logger().info('Configuring Camera Subscriber')
+            self.change_node_state(self.camera_subscriber_client,
+                                   Transition.TRANSITION_CONFIGURE)
 
-            self.get_logger().info("Activating Wall Sensor")
-            self.change_node_state(self.wall_sensor_client, Transition.TRANSITION_ACTIVATE)
+            self.get_logger().info('Activating Wall Sensor')
+            self.change_node_state(self.wall_sensor_client,
+                                   Transition.TRANSITION_ACTIVATE)
 
-            self.get_logger().info("Activating Camera Subscriber")
-            self.change_node_state(self.camera_subscriber_client, Transition.TRANSITION_ACTIVATE) 
+            self.get_logger().info('Activating Camera Subscriber')
+            self.change_node_state(self.camera_subscriber_client,
+                                   Transition.TRANSITION_ACTIVATE)
 
             self.current_state = State.NAVIGATING
 
         elif self.current_state == State.NAVIGATING:
-            if self.front_avg is not None and self.front_avg <= self.front_turn_distance:
+            if (self.front_avg is not None
+                    and self.front_avg <= self.front_turn_distance):
                 self.stop()
 
-                #self.change_node_state(self.camera_subscriber_client, Transition.TRANSITION_DEACTIVATE)
+                # self.change_node_state(self.camera_subscriber_client,
+                # Transition.TRANSITION_DEACTIVATE)
 
                 self.straight(reverse=True)
 
@@ -286,8 +291,10 @@ class NavigatorNode(Node):
                 if valid_red:
                     self.red_victims.append(CartesianPoint(self.x, self.y))
 
-                    #self.change_node_state(self.camera_subscriber_client, Transition.TRANSITION_DEACTIVATE)
-                    #self.change_node_state(self.wall_sensor_client, Transition.TRANSITION_DEACTIVATE)
+                    # self.change_node_state(self.camera_subscriber_client,
+                    # Transition.TRANSITION_DEACTIVATE)
+                    # self.change_node_state(self.wall_sensor_client,
+                    # Transition.TRANSITION_DEACTIVATE)
 
                     self.red_led.on()
 
@@ -311,8 +318,10 @@ class NavigatorNode(Node):
                 if valid_green:
                     self.green_victims.append(CartesianPoint(self.x, self.y))
 
-                    #self.change_node_state(self.camera_subscriber_client, Transition.TRANSITION_DEACTIVATE)
-                    #self.change_node_state(self.wall_sensor_client, Transition.TRANSITION_DEACTIVATE)
+                    # self.change_node_state(self.camera_subscriber_client,
+                    # Transition.TRANSITION_DEACTIVATE)
+                    # self.change_node_state(self.wall_sensor_client,
+                    # Transition.TRANSITION_DEACTIVATE)
 
                     self.green_led.on()
 
@@ -324,9 +333,9 @@ class NavigatorNode(Node):
 
             if self.hole:
                 self.stop()
-                
+
                 self.straight(reverse=True)
-                
+
                 self.current_state = State.REVERSING_FROM_HOLE
 
                 return
@@ -386,27 +395,20 @@ class NavigatorNode(Node):
             self.current_state = State.NAVIGATING
 
         elif self.current_state == State.DISPLAYING_VICTIMS:
-            robot.stop()
+            self.stop()
             self.display_victims()
             self.current_state = State.STOP
 
         elif self.current_state == State.STOP:
-            robot.stop()
+            self.stop()
             sys.exit()
-        
+
+
 def main(args=None):
     rclpy.init(args=args)
-    maze_navigator_node = NavigatorNode()
-    executor = MultiThreadedExecutor()  # Or adjust num_threads as needed
-    executor.add_node(maze_navigator_node)
-    try:
-        executor.spin()
-    except KeyboardInterrupt:
-        pass
-    finally:
-        executor.shutdown()
-        maze_navigator_node.destroy_node()
-        rclpy.shutdown()
+    node = NavigatorNode()
+    rclpy.spin(node)
+    rclpy.shutdown()
 
 
 if __name__ == '__main__':
