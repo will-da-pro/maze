@@ -47,6 +47,8 @@ class WallSensorNode(LifecycleNode):
         self.dist_mult: float = 3
 
     def on_configure(self, state: State) -> TransitionCallbackReturn:
+        self.get_logger().info('Configuring WallSensorNode')
+
         self.left_publisher = self.create_publisher(Wall, 'left_wall', 10)
         self.front_publisher = self.create_publisher(Wall, 'front_wall', 10)
         self.right_publisher = self.create_publisher(Wall, 'right_wall', 10)
@@ -132,6 +134,13 @@ class WallSensorNode(LifecycleNode):
             left_msg.average_distance = self.average_dist(left_points)
             self.left_publisher.publish(left_msg)
 
+            error = (-1/2 * math.pi - closest_left.angle) * self.turn_mult
+            error += (self.target_distance - closest_left.value) * self.dist_mult
+
+            error_msg = Float64()
+            error_msg.data = error
+            self.error_publisher.publish(error_msg)
+
         if closest_front is not None:
             front_msg = Wall()
             front_msg.closest_distance = closest_front.value
@@ -146,14 +155,7 @@ class WallSensorNode(LifecycleNode):
             right_msg.average_distance = self.average_dist(right_points)
             self.right_publisher.publish(right_msg)
 
-        error = (-1/2 * math.pi - closest_left.angle) * self.turn_mult
-        error += (self.target_distance - closest_left.value) * self.dist_mult
-
-        error_msg = Float64()
-        error_msg.data = error
-        self.error_publisher.publish(error_msg)
-
-
+        
 def main(args=None):
     rclpy.init(args=args)
     node = WallSensorNode()

@@ -13,20 +13,22 @@ from lifecycle_msgs.msg import Transition
 import rclpy
 from rclpy.callback_groups import ReentrantCallbackGroup
 from rclpy.executors import MultiThreadedExecutor
-from rclpy.node import LifecycleNode
+from rclpy.node import Node
 from sensor_msgs.msg import Image, LaserScan
 from maze_msgs.msg import Wall, Victims
 from enum import Enum
+import time
 
 class State(Enum):
     INIT = 0
     NAVIGATING = 1
-    TURNING_FROM_WALL = 2
-    IDENTIFYING_VICTIM = 3
-    REVERSING_FROM_HOLE = 4
-    TURNING_FROM_HOLE = 5
-    DISPLAYING_VICTIMS = 6
-    STOP = 7
+    REVERSING_FROM_WALL = 2
+    TURNING_FROM_WALL = 3
+    IDENTIFYING_VICTIM = 4
+    REVERSING_FROM_HOLE = 5
+    TURNING_FROM_HOLE = 6
+    DISPLAYING_VICTIMS = 7
+    STOP = 8
 
 class LaserPoint:
 
@@ -63,9 +65,18 @@ class NavigatorNode(Node):
         self.exit_sub = self.create_subscription(Bool, 'exit_visible', self.exit_callback, 10)
 
         self.wall_sensor_client = self.create_client(ChangeState, '/wall_sensor_node/change_state')
+    
+        while not self.wall_sensor_client.wait_for_service(timeout_sec=5.0):
+            self.get_logger().info("Wall sensor service not available, reconnecting...")
+
         self.camera_subscriber_client = self.create_client(ChangeState, '/camera_subscriber_node/change_state')
 
+        while not self.camera_subscriber_client.wait_for_service(timeout_sec=5.0):
+            self.get_logger().info("Camera subscriber service not available, reconnecting...")
+
         self.twist_publisher = self.create_publisher(Twist, 'cmd_vel', 10)
+
+        self.timer = self.create_timer(0.05, self.state_loop)
         
         self.current_state = State.INIT
 
@@ -85,7 +96,10 @@ class NavigatorNode(Node):
         self.dy: float = 0
         self.dtheta: float = 0
 
-        self.front_avg: float = 0
+        self.straight_start_pos = (0, 0)
+        self.turn_start_angle = 0
+
+        self.front_avg: float | None = None
         self.error: float = 0
 
         self.green_victim: bool = False
@@ -109,96 +123,6 @@ class NavigatorNode(Node):
         req = ChangeState.Request()
         req.transition.id = transition_id
         future = client.call_async(req)
-        rclpy.spin_until_future_complete(self, future)
-
-    def image_callback(self, msg):
-        
-        if n_b / area > self.min_black:
-            self.get_logger().info('Black')
-            self.straight(self, -0.15)
-
-            right_average = self.average_dist(self.right_points)
-
-            if right_average is not None and right_average > self.front_turn_distance:
-                self.turn(self, math.pi / 2)
-
-            else:
-                self.turn(self, math.pi)
-
-            self.straight(self, 0.15)
-
-            return
-
-        valid_green: bool = True
-
-        for point in self.green_victims:
-            if (math.sqrt((point.x - self.x) ** 2 + (point.y - self.y) ** 2)
-                    < self.min_square_dist):
-                valid_green = False
-                break
-
-        valid_red: bool = True
-
-        for point in self.red_victims:
-            if (math.sqrt((point.x - self.x) ** 2 + (point.y - self.y) ** 2)
-                    < self.min_square_dist):
-                valid_red = False
-                break
-
-        if n_g / area > self.min_green and valid_green:
-            self.new_green()
-
-        if n_r / area > self.min_red and valid_red:
-            self.new_red()
-
-        green_count = len(self.green_victims)
-        red_count = len(self.red_victims)
-
-        if n_s / area > self.min_silver and green_count + red_count >= 4:
-            self.get_logger().info('Silver')
-
-            self.straight(self, 0.10)
-
-            self.navigate = False
-            self.stop()
-
-            self.display_victims()
-
-        self.get_logger().info(f'green: {n_g}, red: {n_r}, black: {n_b}, silver: {n_s}')
-
-    def new_green(self):
-        self.get_logger().info('Green')
-        self.navigate = False
-        self.stop()
-
-        self.green_victims.append(CartesianPoint(self.x, self.y))
-
-        sleep_time = 2
-
-        rate = self.create_rate(1 / sleep_time)
-
-        self.green_led.on()
-        rate.sleep()
-        self.green_led.off()
-
-        self.navigate = True
-
-    def new_red(self):
-        self.get_logger().info('Red')
-        self.navigate = False
-        self.stop()
-
-        self.red_victims.append(CartesianPoint(self.x, self.y))
-
-        sleep_time = 2
-
-        rate = self.create_rate(1 / sleep_time)
-
-        self.red_led.on()
-        rate.sleep()
-        self.red_led.off()
-
-        self.navigate = True
 
     def display_victims(self):
         sleep_time = 1
@@ -215,8 +139,6 @@ class NavigatorNode(Node):
             rate.sleep()
             self.red_led.off()
             rate.sleep()
-
-        sys.exit()
 
     @staticmethod
     def euler_from_quaternion(x, y, z, w):
@@ -244,75 +166,48 @@ class NavigatorNode(Node):
 
         return roll_x, pitch_y, yaw_z
 
-    def navigation(func):
-        @functools.wraps(func)
-        def wrapper(self, *args, **kwargs):
-            self.navigate = False
-            self.stop()
-
-            result = func(*args, **kwargs)
-
-            self.stop()
-            self.navigate = True
-
-            return result
-        return wrapper
-
     def stop(self) -> None:
         msg = Twist()
         msg.linear.x = 0.0
         msg.angular.z = 0.0
         self.twist_publisher.publish(msg)
 
-    @navigation
-    def straight(self, dist: float) -> None:
-        target_x = dist * math.cos(self.current_angle) + self.x
+    def straight(self, reverse: bool = False) -> None:
+        self.straight_start_pos = (self.x, self.y)
 
         msg = Twist()
-        msg.linear.x = self.default_speed if dist > 0 else -self.default_speed
+        msg.linear.x = self.default_speed if not reverse else -self.default_speed
         msg.angular.z = 0.0
         self.twist_publisher.publish(msg)
+    
+    def check_straight_complete(self, dist: float) -> None:
+        displacement = math.sqrt((self.x - self.straight_start_pos[0]) ** 2 + (self.y - self.straight_start_pos[1]) ** 2)
+        
+        if displacement > dist:
+            return True
 
-        direction = 1 if target_x > self.x else -1
+        return False
 
-        moving: bool = True
+    def turn(self, clockwise: bool = True) -> None:
+        self.turn_start_angle = self.current_angle
 
-        while moving:
-            self.get_logger().info(f'dir: {direction}, target: {target_x}, x: {self.x}')
-            if direction > 0 and self.x > target_x:
-                moving = False
-
-            elif direction < 0 and self.x < target_x:
-                moving = False
-
-            elif direction == 0 or dist == 0:
-                moving = False
-
-    @navigation
-    def turn(self, angle: float) -> None:
-        self.target_angle = self.current_angle + angle
-
-        turn_vel = self.default_speed if angle > 0 else -self.default_speed
+        turn_vel = self.default_speed if clockwise else -self.default_speed
 
         msg = Twist()
         msg.linear.x = 0.0
         msg.angular.z = float(turn_vel)
         self.twist_publisher.publish(msg)
 
-        turning: bool = True
+    def check_turn_complete(self, angle: float) -> bool:
+        if angle > 0 and self.current_angle - self.turn_start_angle > angle:
+            return True
 
-        while turning:
-            if turn_vel > 0 and self.current_angle > self.target_angle:
-                turning = False
+        elif angle < 0 and self.current_angle - self.turn_start_angle < angle:
+            return True
 
-            elif turn_vel < 0 and self.current_angle < self.target_angle:
-                turning = False
-
-            elif turn_vel == 0:
-                turning = False
+        return False
 
     def odom_callback(self, msg) -> None:
-        self.get_logger().info('Odom')
         self.x = msg.pose.pose.position.x
         self.y = msg.pose.pose.position.y
         self.dx = msg.twist.twist.linear.x
@@ -349,58 +244,155 @@ class NavigatorNode(Node):
         self.exit = msg.data
 
     def state_loop(self) -> None:
+        self.get_logger().info(f'front average: {self.front_avg}')
         if self.current_state == State.INIT:
+            self.get_logger().info("Configuring Wall Sensor")
+            self.change_node_state(self.wall_sensor_client, Transition.TRANSITION_CONFIGURE)
+
+            self.get_logger().info("Configuring Camera Subscriber")
+            self.change_node_state(self.camera_subscriber_client, Transition.TRANSITION_CONFIGURE) 
+
+            self.get_logger().info("Activating Wall Sensor")
             self.change_node_state(self.wall_sensor_client, Transition.TRANSITION_ACTIVATE)
+
+            self.get_logger().info("Activating Camera Subscriber")
             self.change_node_state(self.camera_subscriber_client, Transition.TRANSITION_ACTIVATE) 
+
             self.current_state = State.NAVIGATING
 
         elif self.current_state == State.NAVIGATING:
-            if self.front_avg <= self.front_turn_distance:
-                pass
-                self.current_state = State.TURNING_FROM_WALL
+            if self.front_avg is not None and self.front_avg <= self.front_turn_distance:
+                self.stop()
+
+                #self.change_node_state(self.camera_subscriber_client, Transition.TRANSITION_DEACTIVATE)
+
+                self.straight(reverse=True)
+
+                self.current_state = State.REVERSING_FROM_WALL
+
+                return
 
             if self.red_victim:
-                pass
-                self.current_state = State.IDENTIFYING_VICTIM
+                self.stop()
+
+                valid_red: bool = True
+
+                for point in self.red_victims:
+                    if (math.sqrt((point.x - self.x) ** 2 + (point.y - self.y) ** 2)
+                            < self.min_square_dist):
+                        valid_red = False
+                        break
+
+                if valid_red:
+                    self.red_victims.append(CartesianPoint(self.x, self.y))
+
+                    #self.change_node_state(self.camera_subscriber_client, Transition.TRANSITION_DEACTIVATE)
+                    #self.change_node_state(self.wall_sensor_client, Transition.TRANSITION_DEACTIVATE)
+
+                    self.red_led.on()
+
+                    self.wait_start_time = time.time()
+
+                    self.current_state = State.IDENTIFYING_VICTIM
+
+                    return
 
             if self.green_victim:
-                pass
-                self.current_state = State.IDENTIFYING_VICTIM
+                self.stop()
 
-            if self.hole_visible:
-                pass
+                valid_green: bool = True
+
+                for point in self.green_victims:
+                    if (math.sqrt((point.x - self.x) ** 2 + (point.y - self.y) ** 2)
+                            < self.min_square_dist):
+                        valid_green = False
+                        break
+
+                if valid_green:
+                    self.green_victims.append(CartesianPoint(self.x, self.y))
+
+                    #self.change_node_state(self.camera_subscriber_client, Transition.TRANSITION_DEACTIVATE)
+                    #self.change_node_state(self.wall_sensor_client, Transition.TRANSITION_DEACTIVATE)
+
+                    self.green_led.on()
+
+                    self.wait_start_time = time.time()
+
+                    self.current_state = State.IDENTIFYING_VICTIM
+
+                    return
+
+            if self.hole:
+                self.stop()
+                
+                self.straight(reverse=True)
+                
                 self.current_state = State.REVERSING_FROM_HOLE
 
+                return
+
             if self.exit:
-                pass
+                self.stop()
                 self.current_state = State.DISPLAYING_VICTIMS
+                return
 
             msg = Twist()
-            msg.linear.x = self.default_speed
-            msg.angular.z = self.error
+            msg.linear.x = float(self.default_speed)
+            msg.angular.z = float(self.error)
             self.twist_publisher.publish(msg)
 
+        elif self.current_state == State.REVERSING_FROM_WALL:
+            if not self.check_straight_complete(0.02):
+                return
+
+            self.stop()
+
+            self.turn()
+            self.current_state = State.TURNING_FROM_WALL
+
         elif self.current_state == State.TURNING_FROM_WALL:
-            pass
+            if not self.check_turn_complete(math.pi / 2):
+                return
+
+            self.stop()
+
             self.current_state = State.NAVIGATING
 
         elif self.current_state == State.IDENTIFYING_VICTIM:
-            pass
+            if time.time() - self.wait_start_time < 2:
+                return
+
+            self.green_led.off()
+            self.red_led.off()
+
             self.current_state = State.NAVIGATING
 
         elif self.current_state == State.REVERSING_FROM_HOLE:
-            pass
+            if not self.check_straight_complete(0.15):
+                return
+
+            self.stop()
+
+            self.turn()
+
             self.current_state = State.TURNING_FROM_HOLE
 
         elif self.current_state == State.TURNING_FROM_HOLE:
-            pass
+            if not self.check_turn_complete(math.pi / 2):
+                return
+
+            self.stop()
+
             self.current_state = State.NAVIGATING
 
         elif self.current_state == State.DISPLAYING_VICTIMS:
+            robot.stop()
+            self.display_victims()
             self.current_state = State.STOP
 
         elif self.current_state == State.STOP:
-            pass
+            robot.stop()
+            sys.exit()
         
 def main(args=None):
     rclpy.init(args=args)

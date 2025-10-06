@@ -45,5 +45,5 @@ RUN source /opt/ros/$ROS_DISTRO/setup.bash \
 COPY docker_entrypoint.sh /app/
 
 ENTRYPOINT ["/app/docker_entrypoint.sh"]
-#CMD ["ros2", "launch", "maze_navigator", "maze.launch.py"]
-CMD ["bash"]
+CMD ["ros2", "launch", "maze_navigator", "maze.launch.py"]
+#CMD ["bash"]
