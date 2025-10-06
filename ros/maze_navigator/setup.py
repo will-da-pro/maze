@@ -25,6 +25,8 @@ setup(
     entry_points={
         'console_scripts': [
             'navigator_node = maze_navigator.navigator_node:main',
+            'wall_sensor_node = maze_navigator.wall_sensor_node:main',
+            'camera_subscriber_node = maze_navigator.camera_subscriber_node:main',
         ],
     },
 )

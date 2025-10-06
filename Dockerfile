@@ -10,7 +10,7 @@ RUN apt-get update && apt-get install -y git python3-pip git python3-jinja2 \
       meson cmake \
       python3-yaml python3-ply python3-serial \
       libglib2.0-dev libgstreamer-plugins-base1.0-dev \
-      python3-opencv
+      python3-colcon-meson
 
 # Clone and build raspberrypi's libcamera fork
 RUN git clone https://github.com/raspberrypi/libcamera.git \
@@ -33,11 +33,13 @@ RUN cd /app/src \
   && cd /app \
   && colcon build --symlink-install
 
-RUN apt-get update && apt-get install -y python3-gpiozero
+RUN apt-get update && apt-get install -y python3-gpiozero \
+      python3-opencv
 
 COPY ./ros /app/src
 
-RUN cd /app \
+RUN source /opt/ros/$ROS_DISTRO/setup.bash \
+  && cd /app \
   && colcon build --symlink-install
 
 COPY docker_entrypoint.sh /app/

@@ -1,0 +1,3 @@
+float64 closest_distance
+float64 closest_angle
+float64 average_distance
