@@ -20,6 +20,9 @@ class OdomPublisher(Node):
         self.timer = self.create_timer(0.1, self.publish_odom)  # 10 Hz
         self.start_time = self.get_clock().now()
 
+        self.last_enc_a = 0.0
+        self.last_enc_b = 0.0
+
         self.x = 0.0
         self.y = 0.0
         self.th = 0.0
@@ -70,18 +73,24 @@ class OdomPublisher(Node):
 
         enc_a, enc_b, speed_a, speed_b = enc_data
 
-        angular_vel_mult = 2 * math.pi * self.wheel_radius / self.counts_per_revolution
+        d_a = enc_a - self.last_enc_a
+        self.last_enc_a = enc_a
 
-        vel_a = speed_a * angular_vel_mult
-        vel_b = speed_b * angular_vel_mult
+        d_b = enc_b - self.last_enc_b
+        self.last_enc_b = enc_b
 
-        self.vx = (vel_a + vel_b) / 2
-        self.vth = (vel_a - vel_b) / self.wheel_dist
+        angular_mult = 2 * math.pi * self.wheel_radius / self.counts_per_revolution
+
+        angle_change_a = d_a * angular_mult
+        angle_change_b = d_b * angular_mult
+
+        self.dx = (angle_change_a + angle_change_b) / 2
+        self.dth = (angle_change_a - angle_change_b) / self.wheel_dist
 
         # Update position
-        self.x += self.vx * math.cos(self.th) * dt
-        self.y += self.vx * math.sin(self.th) * dt
-        self.th += self.vth * dt
+        self.x += self.dx * math.cos(self.th)
+        self.y += self.dx * math.sin(self.th)
+        self.th += self.dth
 
         # Orientation as quaternion
         odom_quat = self.euler_to_quaternion(0, 0, self.th)

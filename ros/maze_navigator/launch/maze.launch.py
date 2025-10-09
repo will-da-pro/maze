@@ -2,9 +2,11 @@ import os
 
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
+from launch.actions import DeclareLaunchArgument
 from launch.actions import IncludeLaunchDescription
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch_ros.actions import LifecycleNode, Node
+from launch.substitutions import LaunchConfiguration
 
 
 def generate_launch_description():
@@ -14,7 +16,16 @@ def generate_launch_description():
         'sllidar_c1_launch.py'
     )
 
+
+
     return LaunchDescription([
+        DeclareLaunchArgument('camera', default_value='0'),
+        DeclareLaunchArgument('camera_format', default_value='XBGR8888'),
+        DeclareLaunchArgument('camera_width', default_value='1920'),
+        DeclareLaunchArgument('camera_height', default_value='1080'),
+        DeclareLaunchArgument('camera_sensor_mode', default_value='1920:1080'),
+        DeclareLaunchArgument('camera_orientation', default_value='0'),
+
         Node(
             package='movement',
             executable='odom_publisher',
@@ -38,6 +49,14 @@ def generate_launch_description():
             executable='camera_node',
             name='camera',
             output='screen',
+            parameters=[{
+                'camera': LaunchConfiguration('camera'),
+                'format': LaunchConfiguration('camera_format'),
+                'width': LaunchConfiguration('camera_width'),
+                'height': LaunchConfiguration('camera_height'),
+                'sensor_mode': LaunchConfiguration('camera_sensor_mode'),
+                'orientation': LaunchConfiguration('camera_orientation'),
+            }],
         ),
 
         LifecycleNode(

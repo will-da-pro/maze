@@ -244,7 +244,6 @@ class NavigatorNode(Node):
         self.exit = msg.data
 
     def state_loop(self) -> None:
-        self.get_logger().info(f'front average: {self.front_avg}')
         if self.current_state == State.INIT:
             self.get_logger().info('Configuring Wall Sensor')
             self.change_node_state(self.wall_sensor_client,

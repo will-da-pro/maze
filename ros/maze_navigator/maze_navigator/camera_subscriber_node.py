@@ -33,6 +33,8 @@ class CameraSubscriberNode(LifecycleNode):
         self.silver_upper = (179, 30, 120)
 
     def on_configure(self, state: State) -> TransitionCallbackReturn:
+        self.get_logger().info('Configuring CameraSubscriberNode')
+
         self.victim_publisher = self.create_publisher(Victims, 'victims', 10)
         self.hole_publisher = self.create_publisher(Bool, 'hole_visible', 10)
         self.exit_publisher = self.create_publisher(Bool, 'exit_visible', 10)
