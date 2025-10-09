@@ -64,7 +64,6 @@ class OdomPublisher(Node):
 
     def publish_odom(self):
         current_time = self.get_clock().now()
-        dt = 0.1  # seconds since last update
 
         enc_data = self.get_encoders()
 
