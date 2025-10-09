@@ -24,11 +24,21 @@ def generate_launch_description():
         DeclareLaunchArgument('camera_sensor_mode', default_value='1920:1080'),
         DeclareLaunchArgument('camera_orientation', default_value='0'),
 
+        DeclareLaunchArgument('wheel_dist', default_value='0.175'),
+        DeclareLaunchArgument('counts_per_revolution', default_value='480.0'),
+        DeclareLaunchArgument('wheel_radius', default_value='0.04'),
+        DeclareLaunchArgument('max_counts_per_second', default_value='900.0'),
+
         Node(
             package='movement',
             executable='odom_publisher',
             name='odom_publisher',
             output='screen',
+            parameters=[{
+                'wheel_dist': LaunchConfiguration('wheel_dist'),
+                'counts_per_revolution': LaunchConfiguration('counts_per_revolution'),
+                'wheel_radius': LaunchConfiguration('wheel_radius'),
+            }],
         ),
 
         Node(
@@ -36,6 +46,12 @@ def generate_launch_description():
             executable='twist_subscriber',
             name='twist_subscriber',
             output='screen',
+            parameters=[{
+                'wheel_dist': LaunchConfiguration('wheel_dist'),
+                'counts_per_revolution': LaunchConfiguration('counts_per_revolution'),
+                'wheel_radius': LaunchConfiguration('wheel_radius'),
+                'max_counts_per_second': LaunchConfiguration('max_counts_per_second'),
+            }],
         ),
 
         IncludeLaunchDescription(

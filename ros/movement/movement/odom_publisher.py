@@ -16,6 +16,11 @@ class OdomPublisher(Node):
 
     def __init__(self):
         super().__init__('odom_publisher')
+
+        self.declare_parameter('wheel_dist', 0.175)
+        self.declare_parameter('counts_per_revolution', 480.0)
+        self.declare_parameter('wheel_radius', 0.04)
+
         self.publisher_ = self.create_publisher(Odometry, 'odom', 10)
         self.timer = self.create_timer(0.1, self.publish_odom)  # 10 Hz
         self.start_time = self.get_clock().now()
@@ -33,9 +38,10 @@ class OdomPublisher(Node):
         self.get_logger().info(f'Serial connected: {"y" if self.ser.is_open else "n"}')
         self.get_logger().info(str(self.ser))
 
-        self.wheel_dist = 0.185  # m
-        self.counts_per_revolution = 480
-        self.wheel_radius = 0.04
+        self.wheel_dist = self.get_parameter('wheel_dist').value
+        self.counts_per_revolution = self.get_parameter('counts_per_revolution').value
+        self.wheel_radius = self.get_parameter('wheel_radius').value
+
         self.wheel_circumefrence = math.pi * (self.wheel_radius ** 2)
 
     def get_encoders(self):

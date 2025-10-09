@@ -10,6 +10,7 @@ from lifecycle_msgs.srv import ChangeState
 from maze_msgs.msg import Victims, Wall
 from nav_msgs.msg import Odometry
 import rclpy
+from rclpy.executors import MultiThreadedExecutor
 from rclpy.node import Node
 from std_msgs.msg import Bool, Float64
 
@@ -125,15 +126,17 @@ class NavigatorNode(Node):
 
     def display_victims(self):
         sleep_time = 1
-        rate = self.create_rate(1 / sleep_time)
+        rate = self.create_rate(1 / sleep_time, self.get_clock())
 
         for _ in self.green_victims:
+            self.get_logger().info("Displaying Green")
             self.green_led.on()
             rate.sleep()
             self.green_led.off()
             rate.sleep()
 
         for _ in self.red_victims:
+            self.get_logger().info("Displaying Red")
             self.red_led.on()
             rate.sleep()
             self.red_led.off()
@@ -285,6 +288,9 @@ class NavigatorNode(Node):
 
                 if valid_red:
                     self.stop()
+
+                    self.get_logger().info("Red Victim")
+
                     self.red_victims.append(CartesianPoint(self.x, self.y))
 
                     self.red_led.on()
@@ -306,6 +312,9 @@ class NavigatorNode(Node):
 
                 if valid_green:
                     self.stop()
+
+                    self.get_logger().info("Green Victim")
+
                     self.green_victims.append(CartesianPoint(self.x, self.y))
 
                     self.green_led.on()
@@ -385,8 +394,11 @@ class NavigatorNode(Node):
 
         elif self.current_state == State.DISPLAYING_VICTIMS:
             self.stop()
-            self.display_victims()
+
+            self.get_logger().info("Exiting")
+
             self.current_state = State.STOP
+            self.display_victims()
 
         elif self.current_state == State.STOP:
             self.stop()
@@ -395,10 +407,17 @@ class NavigatorNode(Node):
 
 def main(args=None):
     rclpy.init(args=args)
-    node = NavigatorNode()
-    rclpy.spin(node)
-    rclpy.shutdown()
-
-
+    maze_navigator_node = NavigatorNode()
+    executor = MultiThreadedExecutor()  # Or adjust num_threads as needed
+    executor.add_node(maze_navigator_node)
+    try:
+        executor.spin()
+    except KeyboardInterrupt:
+        pass
+    finally:
+        executor.shutdown()
+        maze_navigator_node.destroy_node()
+        rclpy.shutdown()
+    
 if __name__ == '__main__':
     main()

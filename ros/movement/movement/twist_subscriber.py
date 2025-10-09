@@ -15,6 +15,12 @@ class TwistSubscriber(Node):
 
     def __init__(self):
         super().__init__('twist_subscriber')
+
+        self.declare_parameter('wheel_dist', 0.175)
+        self.declare_parameter('counts_per_revolution', 480.0)
+        self.declare_parameter('wheel_radius', 0.04)
+        self.declare_parameter('max_counts_per_second', 900.0)
+
         self.subscription = self.create_subscription(
                 Twist,
                 '/cmd_vel',
@@ -24,10 +30,11 @@ class TwistSubscriber(Node):
 
         self.ser = serial.Serial('/dev/ttyAMA0', 115200)
 
-        self.wheel_dist = 0.185  # m
-        self.counts_per_revolution = 480
-        self.max_counts_per_second = 900
-        self.wheel_radius = 0.04
+        self.wheel_dist = self.get_parameter('wheel_dist').value
+        self.counts_per_revolution = self.get_parameter('counts_per_revolution').value
+        self.wheel_radius = self.get_parameter('wheel_radius').value
+        self.max_counts_per_second = self.get_parameter('max_counts_per_second').value
+
         self.speed_mult = self.counts_per_revolution / (self.wheel_radius * 2 * math.pi)
 
         self.get_logger().info('Twist subscriber node started!')
