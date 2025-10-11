@@ -23,8 +23,9 @@ class State(Enum):
     IDENTIFYING_VICTIM = 4
     REVERSING_FROM_HOLE = 5
     TURNING_FROM_HOLE = 6
-    DISPLAYING_VICTIMS = 7
-    STOP = 8
+    EXITING = 7
+    DISPLAYING_VICTIMS = 8
+    STOP = 9
 
 
 class LaserPoint:

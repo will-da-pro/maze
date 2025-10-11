@@ -53,12 +53,13 @@ class TwistSubscriber(Node):
         linear_x = fitted(linear_x)
         angular_z = fitted(angular_z)
 
+        if angular_z < -60:
+            angular_z = -60
+
         linear_x_byte = int(linear_x) & 0xFF
-        if linear_x < 0:
-            linear_x_byte += 0x80
         angular_z_byte = int(angular_z) & 0xFF
-        if angular_z < 0:
-            angular_z_byte += 0x80
+
+        self.get_logger().info(f"Bytes: {linear_x_byte}, {angular_z_byte}")
 
         self.bus.write_i2c_block_data(self.addr, 0xA5, [0x30, linear_x_byte, angular_z_byte])
 

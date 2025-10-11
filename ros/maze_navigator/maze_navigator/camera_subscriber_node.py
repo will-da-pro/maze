@@ -18,7 +18,7 @@ class CameraSubscriberNode(LifecycleNode):
 
         self.min_green: float = 0.01
         self.min_red: float = 0.1
-        self.min_black: float = 0.5
+        self.min_black: float = 0.05
         self.min_silver: float = 0.1
 
         self.green_lower = (42, 130, 130)
@@ -28,9 +28,9 @@ class CameraSubscriberNode(LifecycleNode):
         self.red_lower_2 = (160, 160, 150)
         self.red_upper_2 = (179, 255, 255)
         self.black_lower = (0, 0, 0)
-        self.black_upper = (179, 150, 30)
-        self.silver_lower = (0, 0, 240)
-        self.silver_upper = (179, 30, 255)
+        self.black_upper = (179, 75, 70)
+        self.silver_lower = (0, 0, 70)
+        self.silver_upper = (179, 30, 170)
 
     def on_configure(self, state: State) -> TransitionCallbackReturn:
         self.get_logger().info('Configuring CameraSubscriberNode')
@@ -80,7 +80,7 @@ class CameraSubscriberNode(LifecycleNode):
         num_black = cv2.countNonZero(black_mask)
         num_silver = cv2.countNonZero(silver_mask)
 
-        #self.get_logger().info(f"Green: {num_green}, Red: {num_red}, Black: {num_black}, Silver: {num_silver}")
+        self.get_logger().info(f"Green: {num_green}, Red: {num_red}, Black: {num_black}, Silver: {num_silver}")
 
         total_area: int = msg.width * msg.height
 
