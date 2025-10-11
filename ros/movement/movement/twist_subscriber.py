@@ -3,7 +3,7 @@ import math
 from geometry_msgs.msg import Twist
 import rclpy
 from rclpy.node import Node
-import serial
+from smbus import SMBus
 
 
 class TwistSubscriber(Node):
@@ -28,7 +28,8 @@ class TwistSubscriber(Node):
                 10
         )
 
-        self.ser = serial.Serial('/dev/ttyAMA0', 115200)
+        self.bus = SMBus(1)
+        self.addr = 0x67
 
         self.wheel_dist = self.get_parameter('wheel_dist').value
         self.counts_per_revolution = self.get_parameter('counts_per_revolution').value
@@ -40,7 +41,7 @@ class TwistSubscriber(Node):
         self.get_logger().info('Twist subscriber node started!')
 
     def stop(self):
-        self.ser.write(self.START_FLAG + self.STOP_REQUEST)
+        self.bus.write_i2c_block_data(self.addr, 0xA5, [0x31])
 
     def twist_callback(self, msg):
         linear_x = int((msg.linear.x * self.speed_mult * 127) / self.max_counts_per_second)
@@ -52,12 +53,14 @@ class TwistSubscriber(Node):
         linear_x = fitted(linear_x)
         angular_z = fitted(angular_z)
 
-        linear_x_byte: bytes = int(linear_x).to_bytes(1, 'big',  signed=True)
-        angular_z_byte: bytes = int(angular_z).to_bytes(1, 'big',  signed=True)
+        linear_x_byte = int(linear_x) & 0xFF
+        if linear_x < 0:
+            linear_x_byte += 0x80
+        angular_z_byte = int(angular_z) & 0xFF
+        if angular_z < 0:
+            angular_z_byte += 0x80
 
-        self.ser.write(self.START_FLAG + self.DRIVE_REQUEST
-                       + linear_x_byte
-                       + angular_z_byte)
+        self.bus.write_i2c_block_data(self.addr, 0xA5, [0x30, linear_x_byte, angular_z_byte])
 
     def __del__(self):
         self.stop()

@@ -4,7 +4,7 @@ from geometry_msgs.msg import Point, Quaternion, Twist, Vector3
 from nav_msgs.msg import Odometry
 import rclpy
 from rclpy.node import Node
-import serial
+from smbus import SMBus
 
 
 class OdomPublisher(Node):
@@ -34,9 +34,8 @@ class OdomPublisher(Node):
         self.vx = 0.0  # m/s
         self.vth = 0.0  # rad/s
 
-        self.ser = serial.Serial('/dev/ttyAMA0', 115200, timeout=1)
-        self.get_logger().info(f'Serial connected: {"y" if self.ser.is_open else "n"}')
-        self.get_logger().info(str(self.ser))
+        self.addr = 0x67
+        self.bus = SMBus(1)
 
         self.wheel_dist = self.get_parameter('wheel_dist').value
         self.counts_per_revolution = self.get_parameter('counts_per_revolution').value
@@ -45,26 +44,13 @@ class OdomPublisher(Node):
         self.wheel_circumefrence = math.pi * (self.wheel_radius ** 2)
 
     def get_encoders(self):
-        self.ser.write(self.START_FLAG + self.ENCODER_REQUEST)
-        msg = self.ser.read(18)
+        msg = self.bus.read_i2c_block_data(self.addr, 0, 16)
 
-        if len(msg) < 18:
-            self.get_logger().warn(f'Incorrect packet size ({len(msg)}).')
-            return
+        enc_a = int.from_bytes(msg[0:4], signed=True)
+        enc_b = int.from_bytes(msg[4:8], signed=True)
 
-        if msg[0:1] != self.START_FLAG:
-            self.get_logger().warn(f'Incorrect start flag ({msg[0]}).')
-            return
-
-        if msg[1:2] != self.ENCODER_RESPONSE:
-            self.get_logger().warn(f'Incorrect response byte ({msg[1]}).')
-            return
-
-        enc_a = int.from_bytes(msg[2:6], signed=True)
-        enc_b = int.from_bytes(msg[6:10], signed=True)
-
-        speed_a = int.from_bytes(msg[10:14], signed=True)
-        speed_b = int.from_bytes(msg[14:18], signed=True)
+        speed_a = int.from_bytes(msg[8:12], signed=True)
+        speed_b = int.from_bytes(msg[12:16], signed=True)
 
         return enc_a, enc_b, speed_a, speed_b
 

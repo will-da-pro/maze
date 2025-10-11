@@ -36,6 +36,8 @@ RUN cd /app/src \
 RUN apt-get update && apt-get install -y python3-gpiozero \
       python3-opencv
 
+RUN apt-get update && apt-get install -y python3-smbus
+
 COPY ./ros /app/src
 
 RUN source /opt/ros/$ROS_DISTRO/setup.bash \

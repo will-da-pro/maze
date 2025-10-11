@@ -76,7 +76,7 @@ class NavigatorNode(Node):
         self.twist_publisher = self.create_publisher(Twist, 'cmd_vel', 10)
 
         self.timer = self.create_timer(0.05, self.state_loop)
-
+        
         self.current_state = State.INIT
 
         self.front_turn_distance: float = 0.16
