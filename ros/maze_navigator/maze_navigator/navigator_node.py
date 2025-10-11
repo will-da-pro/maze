@@ -202,6 +202,7 @@ class NavigatorNode(Node):
         self.twist_publisher.publish(msg)
 
     def check_turn_complete(self, angle: float) -> bool:
+        #self.get_logger().info(f"Angle: {self.current_angle}, Start Angle: {self.turn_start_angle}, Target: {angle}")
         if angle > 0 and self.current_angle - self.turn_start_angle > angle:
             return True
 
@@ -220,10 +221,14 @@ class NavigatorNode(Node):
         q = msg.pose.pose.orientation
         new_angle = self.euler_from_quaternion(q.x, q.y, q.z, q.w)[2]
 
+        #self.get_logger().info(f"dtheta: {self.dtheta}")
+
         if new_angle < self.last_angle and self.dtheta > 0:
+            #self.get_logger().info("New Right Turn")
             self.turn_count += 1
 
         elif new_angle > self.last_angle and self.dtheta < 0:
+            #self.get_logger().info("New Left Turn")
             self.turn_count -= 1
 
         self.last_angle = new_angle
@@ -247,6 +252,7 @@ class NavigatorNode(Node):
         self.exit = msg.data
 
     def state_loop(self) -> None:
+        #self.get_logger().info(f"State: {self.current_state}")
         if self.current_state == State.INIT:
             self.get_logger().info('Configuring Wall Sensor')
             self.change_node_state(self.wall_sensor_client,
@@ -340,7 +346,8 @@ class NavigatorNode(Node):
                 total_victims = len(self.red_victims) + len(self.green_victims)
 
                 if total_victims >= self.min_victims:
-                    self.current_state = State.DISPLAYING_VICTIMS
+                    self.straight()
+                    self.current_state = State.EXITING
                     return
 
             msg = Twist()
@@ -349,12 +356,13 @@ class NavigatorNode(Node):
             self.twist_publisher.publish(msg)
 
         elif self.current_state == State.REVERSING_FROM_WALL:
-            if not self.check_straight_complete(0.02):
+            if not self.check_straight_complete(0.01):
                 return
 
             self.stop()
 
-            self.turn()
+            self.turn(clockwise=True)
+
             self.current_state = State.TURNING_FROM_WALL
 
         elif self.current_state == State.TURNING_FROM_WALL:
@@ -375,12 +383,12 @@ class NavigatorNode(Node):
             self.current_state = State.NAVIGATING
 
         elif self.current_state == State.REVERSING_FROM_HOLE:
-            if not self.check_straight_complete(0.15):
+            if not self.check_straight_complete(0.10):
                 return
 
             self.stop()
 
-            self.turn()
+            self.turn(clockwise=True)
 
             self.current_state = State.TURNING_FROM_HOLE
 
@@ -391,6 +399,14 @@ class NavigatorNode(Node):
             self.stop()
 
             self.current_state = State.NAVIGATING
+
+        elif self.current_state == State.EXITING:
+            if not self.check_straight_complete(0.10):
+                return
+
+            self.stop()
+
+            self.current_state = State.DISPLAYING_VICTIMS
 
         elif self.current_state == State.DISPLAYING_VICTIMS:
             self.stop()

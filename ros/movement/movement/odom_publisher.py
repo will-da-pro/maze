@@ -70,6 +70,7 @@ class OdomPublisher(Node):
 
     def publish_odom(self):
         current_time = self.get_clock().now()
+        dt = 0.1
 
         enc_data = self.get_encoders()
 
@@ -114,7 +115,7 @@ class OdomPublisher(Node):
         # Set the velocity
         odom.twist.twist = Twist(
             linear=Vector3(x=self.vx, y=0.0, z=0.0),
-            angular=Vector3(x=0.0, y=0.0, z=self.vth)
+            angular=Vector3(x=0.0, y=0.0, z=self.dth / dt)
         )
 
         self.publisher_.publish(odom)
